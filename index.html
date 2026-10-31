@@ -128,6 +128,13 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     </section>
 
     <section>
+      <h3>Photo check alerts</h3>
+      <label class="row"><input type="checkbox" id="alertOn" style="accent-color:var(--rose)"> Phone notification when a check is due</label>
+      <label class="row" style="margin-top:8px"><input type="checkbox" id="buzzOn" style="accent-color:var(--rose)"> Also a short buzz from the toy</label>
+      <p class="empty" style="margin-top:6px">Works even if After Dark is closed, for checks up to 35 minutes away. Cancelled when you send the photo or use VOIDLOCK.</p>
+    </section>
+
+    <section>
       <h3>Change background</h3>
       <div class="choice">
         <label><input type="radio" name="mode" value="reply" id="m-reply"> With each reply</label>
@@ -199,7 +206,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 <script>
 const $=id=>document.getElementById(id);
 const store={get(k,d){try{const v=localStorage.getItem('ad_'+k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('ad_'+k,JSON.stringify(v))}catch(e){}}};
-let settings={mode:store.get('mode','reply'),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:store.get('name','Grok'),photosOn:store.get('photosOn',true)};
+let settings={mode:store.get('mode','reply'),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:store.get('name','Grok'),photosOn:store.get('photosOn',true),alertOn:store.get('alertOn',true),buzzOn:store.get('buzzOn',false)};
 let photos=[]; let urls=[]; let order=[]; let pos=-1; let layer=0; let timer=null;
 
 function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,3200)}
@@ -283,8 +290,15 @@ async function send(){
 /* photo checks */
 let check=store.get('check',null), checkCard=null, tick=null, checkSetAt=store.get('checkSetAt',0);
 function fmt(ms){const s=Math.max(0,Math.ceil(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
-function setCheck(due,cam){check={due,cam};checkSetAt=Date.now();store.set('check',check);store.set('checkSetAt',checkSetAt);renderCheck()}
-function clearCheck(){check=null;store.set('check',null);if(checkCard){checkCard.remove();checkCard=null}clearInterval(tick);tick=null;$('status').textContent=apiKey?'Grok · online':'Add your key in ☰'}
+const ALERT_HOOK='https://hook.eu1.make.com/d8e85t5k2vaeyjwq556lrugd7xfoif3r';
+function alertMake(fields){try{fetch(ALERT_HOOK,{method:'POST',mode:'no-cors',body:new URLSearchParams(fields)}).catch(()=>{})}catch(e){}}
+function setCheck(due,cam){
+  const id='ad-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  check={due,cam,id};checkSetAt=Date.now();store.set('check',check);store.set('checkSetAt',checkSetAt);renderCheck();
+  const delay=Math.round((due-Date.now())/1000);
+  if(settings.alertOn&&delay>=20&&delay<=2100)alertMake({action:'PHOTO_CHECK_START',request_id:id,delay_s:String(delay),buzz:settings.buzzOn?'yes':'no'});
+}
+function clearCheck(){if(check&&check.id&&check.due>Date.now()-60000)alertMake({action:'PHOTO_CHECK_CANCEL'});check=null;store.set('check',null);if(checkCard){checkCard.remove();checkCard=null}clearInterval(tick);tick=null;$('status').textContent=apiKey?'Grok · online':'Add your key in ☰'}
 function renderCheck(){
   clearInterval(tick); if(!check)return;
   if(!checkCard){checkCard=document.createElement('div');checkCard.className='checkcard';checkCard.innerHTML='<div class="ck-title"></div><div class="row ck-btns" hidden><button class="btn primary" data-cam="front">Front camera</button><button class="btn primary" data-cam="back">Back camera</button></div>';checkCard.querySelectorAll('button').forEach(b=>b.onclick=()=>openCam(b.dataset.cam));chat.appendChild(checkCard)}
@@ -331,10 +345,12 @@ $('resetPersona').onclick=()=>{persona=DEFAULT_PERSONA;$('persona').value=person
 let freshArmed=false;
 $('newChat').onclick=()=>{if(!freshArmed){freshArmed=true;$('newChat').textContent='Tap again to clear the chat';setTimeout(()=>{freshArmed=false;$('newChat').textContent='Start a fresh chat'},3000);return}
   freshArmed=false;$('newChat').textContent='Start a fresh chat';history=[];saveHistory();chat.innerHTML='';checkCard=null;clearCheck();note('Fresh chat started');$('sheet').hidden=true};
-$('void').onclick=()=>toast('VOIDLOCK isn’t connected in this preview. Use your normal VOIDLOCK until it is.');
+$('void').onclick=()=>{if(check)clearCheck();toast('Photo check cancelled. VOIDLOCK for the lock and toys isn’t connected here yet. Use your normal VOIDLOCK.')};
 $('nextBtn').onclick=()=>{if(!urls.length){toast('Add photos in ☰ first');return}if(!settings.photosOn){toast('Photos are off. Tap the round icon to turn them on.');return}next()};
 function setPhotos(on){settings.photosOn=on;store.set('photosOn',on);$('photosOn').checked=on;pos=Math.max(-1,pos-1);next()}
 $('photosOn').checked=settings.photosOn;$('photosOn').onchange=e=>setPhotos(e.target.checked);
+$('alertOn').checked=settings.alertOn;$('alertOn').onchange=e=>{settings.alertOn=e.target.checked;store.set('alertOn',settings.alertOn)};
+$('buzzOn').checked=settings.buzzOn;$('buzzOn').onchange=e=>{settings.buzzOn=e.target.checked;store.set('buzzOn',settings.buzzOn)};
 $('avatar').onclick=()=>{setPhotos(!settings.photosOn);toast(settings.photosOn?'Photos on':'Photos off')};
 $('sheet').addEventListener('click',e=>{if(e.target.id==='sheet')$('lib').open=false});
 $('closeSettings').addEventListener('click',()=>{$('lib').open=false});
