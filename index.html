@@ -27,6 +27,10 @@ body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15p
 .bg{position:fixed;inset:0;background:radial-gradient(120% 80% at 70% 10%,#3b1424 0%,var(--bg) 60%);z-index:0}
 .photo{position:fixed;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.2s ease;z-index:1}
 .photo.on{opacity:1}
+.logo{position:fixed;inset:0;z-index:1;background:url("logo.png") center/min(70vw,420px) no-repeat;opacity:0;transition:opacity 1.2s ease}
+.logo.on{opacity:1}
+summary::-webkit-details-marker{display:none}
+.avatar{cursor:pointer}
 .shade{position:fixed;inset:0;z-index:2;background:rgba(12,4,8,var(--dim,.45));backdrop-filter:blur(var(--blur,0px));-webkit-backdrop-filter:blur(var(--blur,0px))}
 .app{position:relative;z-index:3;height:100%;display:flex;flex-direction:column}
 header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line);background:rgba(20,8,14,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
@@ -72,13 +76,14 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 <body>
 
 <div class="bg"></div>
+<div class="logo" id="logo"></div>
 <div class="photo" id="p0"></div>
 <div class="photo" id="p1"></div>
 <div class="shade" id="shade"></div>
 
 <div class="app">
   <header>
-    <div class="avatar" aria-hidden="true">G</div>
+    <button class="avatar" id="avatar" aria-label="Photos on or off" style="border:none;padding:0">G</button>
     <div class="who">
       <h1 id="name">Grok</h1>
       <p id="status">Connecting…</p>
@@ -106,14 +111,9 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     </div>
 
     <section>
-      <h3>Background photos</h3>
-      <div class="row" style="margin-bottom:10px">
-        <label class="btn primary" for="files">Add photos</label>
-        <input type="file" id="files" accept="image/*" multiple hidden>
-        <button class="btn warn" id="clearAll">Remove all</button>
-      </div>
-      <div class="thumbs" id="thumbs"></div>
-      <p class="empty" id="emptyNote">No photos yet. They stay on this phone only.</p>
+      <h3>Background</h3>
+      <label class="row"><input type="checkbox" id="photosOn" style="accent-color:var(--rose)"> Show my photos</label>
+      <p class="empty" style="margin-top:6px">Off shows the logo instead. Tip: tap the round icon at the top left to switch quickly.</p>
     </section>
 
     <section>
@@ -165,6 +165,21 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       </div>
       <p class="empty" style="margin-top:6px">Saves your photos, chat, personality and settings in one file. Keep it in Google Drive. Your Grok key isn't included.</p>
     </section>
+
+    <section>
+      <details id="lib">
+        <summary class="btn" style="list-style:none;display:block">Photo library (<span id="photoCount">0</span>) ▾</summary>
+        <div style="margin-top:12px">
+          <div class="row" style="margin-bottom:10px">
+            <label class="btn primary" for="files">Add photos</label>
+            <input type="file" id="files" accept="image/*" multiple hidden>
+            <button class="btn warn" id="clearAll">Remove all</button>
+          </div>
+          <div class="thumbs" id="thumbs"></div>
+          <p class="empty" id="emptyNote">No photos yet. They stay on this phone only.</p>
+        </div>
+      </details>
+    </section>
   </div>
 </div>
 
@@ -173,7 +188,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 <script>
 const $=id=>document.getElementById(id);
 const store={get(k,d){try{const v=localStorage.getItem('ad_'+k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('ad_'+k,JSON.stringify(v))}catch(e){}}};
-let settings={mode:store.get('mode','reply'),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:store.get('name','Grok')};
+let settings={mode:store.get('mode','reply'),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:store.get('name','Grok'),photosOn:store.get('photosOn',true)};
 let photos=[]; let urls=[]; let order=[]; let pos=-1; let layer=0; let timer=null;
 
 function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,3200)}
@@ -195,7 +210,8 @@ async function refresh(){
 }
 function buildOrder(){order=photos.map((_,i)=>i);if(settings.shuffle){for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]]}}pos=-1}
 function next(){
-  if(!urls.length){$('p0').classList.remove('on');$('p1').classList.remove('on');return}
+  if(!urls.length||!settings.photosOn){$('p0').classList.remove('on');$('p1').classList.remove('on');$('logo').classList.add('on');return}
+  $('logo').classList.remove('on');
   pos++; if(pos>=order.length){buildOrder();pos=0}
   const u=urls[order[pos]]; layer=1-layer;
   const show=$('p'+layer), hide=$('p'+(1-layer));
@@ -203,7 +219,7 @@ function next(){
 }
 function renderThumbs(){
   const t=$('thumbs'); t.innerHTML='';
-  $('emptyNote').hidden=photos.length>0;
+  $('emptyNote').hidden=photos.length>0; $('photoCount').textContent=photos.length;
   photos.forEach((p,i)=>{const d=document.createElement('div');d.className='thumb';d.style.backgroundImage=`url("${urls[i]}")`;const b=document.createElement('button');b.textContent='✕';b.setAttribute('aria-label','Remove photo');b.onclick=async()=>{await delPhoto(p.id);await refresh();next()};d.appendChild(b);t.appendChild(d)});
 }
 
@@ -252,7 +268,12 @@ let freshArmed=false;
 $('newChat').onclick=()=>{if(!freshArmed){freshArmed=true;$('newChat').textContent='Tap again to clear the chat';setTimeout(()=>{freshArmed=false;$('newChat').textContent='Start a fresh chat'},3000);return}
   freshArmed=false;$('newChat').textContent='Start a fresh chat';history=[];saveHistory();chat.innerHTML='';note('Fresh chat started');$('sheet').hidden=true};
 $('void').onclick=()=>toast('VOIDLOCK isn’t connected in this preview. Use your normal VOIDLOCK until it is.');
-$('nextBtn').onclick=()=>{if(!urls.length){toast('Add photos in ☰ first');return}next()};
+$('nextBtn').onclick=()=>{if(!urls.length){toast('Add photos in ☰ first');return}if(!settings.photosOn){toast('Photos are off. Tap the round icon to turn them on.');return}next()};
+function setPhotos(on){settings.photosOn=on;store.set('photosOn',on);$('photosOn').checked=on;pos=Math.max(-1,pos-1);next()}
+$('photosOn').checked=settings.photosOn;$('photosOn').onchange=e=>setPhotos(e.target.checked);
+$('avatar').onclick=()=>{setPhotos(!settings.photosOn);toast(settings.photosOn?'Photos on':'Photos off')};
+$('sheet').addEventListener('click',e=>{if(e.target.id==='sheet')$('lib').open=false});
+$('closeSettings').addEventListener('click',()=>{$('lib').open=false});
 
 /* settings sheet */
 $('openSettings').onclick=()=>{$('sheet').hidden=false};
@@ -300,11 +321,11 @@ $('restoreFile').addEventListener('change',async e=>{
   if(!data||data.app!=='afterdark'){toast('That file isn’t an After Dark backup.');return}
   toast('Restoring…');
   if(Array.isArray(data.photos)&&db){for(const p of photos)await delPhoto(p.id);for(const d of data.photos){try{await addPhoto(await dataToBlob(d))}catch(err){}}}
-  if(data.settings){settings=Object.assign(settings,data.settings);['mode','minutes','shuffle','dim','blur','name'].forEach(k=>store.set(k,settings[k]))}
+  if(data.settings){settings=Object.assign(settings,data.settings);['mode','minutes','shuffle','dim','blur','name','photosOn'].forEach(k=>store.set(k,settings[k]))}
   if(typeof data.persona==='string'){persona=data.persona;store.set('persona',persona);$('persona').value=persona}
   if(Array.isArray(data.history)){history=data.history;saveHistory();chat.innerHTML='';history.forEach(m=>bubble(m.text,m.who==='me'?'me':'them'))}
   document.querySelectorAll('input[name=mode]').forEach(r=>r.checked=r.value===settings.mode);
-  $('minutes').value=String(settings.minutes);$('shuffle').checked=settings.shuffle;$('dim').value=settings.dim;$('blur').value=settings.blur;$('nameInput').value=settings.name;
+  $('minutes').value=String(settings.minutes);$('shuffle').checked=settings.shuffle;$('dim').value=settings.dim;$('blur').value=settings.blur;$('nameInput').value=settings.name;$('photosOn').checked=settings.photosOn;
   applyLook();applyTimer();await refresh();next();
   toast('Restored '+photos.length+' photos and your chat');
 });
