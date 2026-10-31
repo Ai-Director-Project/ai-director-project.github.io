@@ -689,9 +689,9 @@ $('backupBtn').onclick=async()=>{
   toast('Making backup…');
   const pics=[];for(const p of photos){const d=await blobToData(p.blob);if(d)pics.push(d)}
   const data={app:'afterdark',version:1,saved:new Date().toISOString(),settings,persona,history,toys,sess,profile:adaMem,notes,photos:pics};
-  const day=new Date().toISOString().slice(0,10);
+  const now=new Date(),day=now.toLocaleDateString('en-CA')+'-'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0');
   const file=new File([JSON.stringify(data)],'after-dark-backup-'+day+'.json',{type:'application/json'});
-  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'After Dark backup'});toast('Backup ready');return}}catch(e){if(e&&e.name==='AbortError'){toast('Backup cancelled');return}}
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});toast('Backup ready');return}}catch(e){if(e&&e.name==='AbortError'){toast('Backup cancelled');return}}
   const u=URL.createObjectURL(file);const a=document.createElement('a');a.href=u;a.download=file.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);
   toast('Backup saved ('+pics.length+' photos)');
 };
