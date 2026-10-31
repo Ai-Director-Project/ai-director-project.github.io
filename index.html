@@ -141,6 +141,8 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <h3>Photo check alerts</h3>
       <label class="row"><input type="checkbox" id="alertOn" style="accent-color:var(--rose)"> Phone notification when a check is due</label>
       <label class="row" style="margin-top:8px"><input type="checkbox" id="buzzOn" style="accent-color:var(--rose)"> Also a short buzz from the toy</label>
+      <label class="row" style="margin-top:8px">Time to take the photo
+        <select id="winSec"><option value="0">No limit</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option></select></label>
       <p class="empty" style="margin-top:6px">Works even if After Dark is closed, for checks up to 35 minutes away. Cancelled when you send the photo or use VOIDLOCK.</p>
     </section>
 
@@ -293,7 +295,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 <script>
 const $=id=>document.getElementById(id);
 const store={get(k,d){try{const v=localStorage.getItem('ad_'+k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('ad_'+k,JSON.stringify(v))}catch(e){}}};
-let settings={onReply:store.get('onReply',store.get('mode','reply')==='reply'),onOpen:store.get('onOpen',store.get('mode','reply')==='open'),onTimer:store.get('onTimer',store.get('mode','reply')==='timer'),bubbleA:store.get('bubbleA',20),solo:store.get('solo',true),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:(n=>(!n||n==='Grok')?'Ada':n)(store.get('name','Ada')),photosOn:store.get('photosOn',true),alertOn:store.get('alertOn',true),adaCtl:store.get('adaCtl',true),buzzOn:store.get('buzzOn',false)};
+let settings={onReply:store.get('onReply',store.get('mode','reply')==='reply'),onOpen:store.get('onOpen',store.get('mode','reply')==='open'),onTimer:store.get('onTimer',store.get('mode','reply')==='timer'),bubbleA:store.get('bubbleA',20),solo:store.get('solo',true),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:(n=>(!n||n==='Grok')?'Ada':n)(store.get('name','Ada')),photosOn:store.get('photosOn',true),alertOn:store.get('alertOn',true),adaCtl:store.get('adaCtl',true),buzzOn:store.get('buzzOn',false),winSec:store.get('winSec',15)};
 let photos=[]; let urls=[]; let order=[]; let pos=-1; let layer=0; let timer=null;
 
 function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,3200)}
@@ -345,9 +347,9 @@ function bubble(text,cls){const d=document.createElement('div');d.className='msg
 function note(text){const d=document.createElement('div');d.className='note';d.textContent=text;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
 const TAG=/\[PHOTO(?:\s+(now|\d{1,3}))?(?:\s*(?:min|mins|minutes)?)?(?:\s+(front|back))?\s*\]/i;
 function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
-history.forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'));
+history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'));
 function saveHistory(){history=history.slice(-60);store.set('history',history)}
-const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, 0 to 120, then front or back camera). Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
+const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, 0 to 120, then front or back camera). Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a check comes due he only has a short window to take the photo; if he misses it the page will tell you. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
 /* toy bridge (Make) */
 const TOY_HOOK='https://hook.eu1.make.com/5ln4unqvf8sxitfag4kgwhrs1sapl82y';
 function lovKey(n){n=String(n).toLowerCase();return n.includes('gemini')?'GEMINI':n.includes('hush')?'HUSH':n.includes('tenera')?'TENERA':null}
@@ -512,7 +514,7 @@ const ALERT_HOOK='https://hook.eu1.make.com/d8e85t5k2vaeyjwq556lrugd7xfoif3r';
 function alertMake(fields){try{fetch(ALERT_HOOK,{method:'POST',mode:'no-cors',body:new URLSearchParams(fields)}).catch(()=>{})}catch(e){}}
 function setCheck(due,cam){
   const id='ad-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-  check={due,cam,id};checkSetAt=Date.now();store.set('check',check);store.set('checkSetAt',checkSetAt);renderCheck();
+  check={due,cam,id,win:settings.winSec||0};checkSetAt=Date.now();store.set('check',check);store.set('checkSetAt',checkSetAt);renderCheck();
   const delay=Math.round((due-Date.now())/1000);
   if(settings.alertOn&&delay>=20&&delay<=2100)alertMake({action:'PHOTO_CHECK_START',request_id:id,delay_s:String(delay),buzz:settings.buzzOn?'yes':'no'});
 }
@@ -522,15 +524,27 @@ function renderCheck(){
   if(!checkCard){checkCard=document.createElement('div');checkCard.className='checkcard';checkCard.innerHTML='<div class="ck-title"></div><div class="row ck-btns" hidden><button class="btn primary" data-cam="front">Front camera</button><button class="btn primary" data-cam="back">Back camera</button></div>';checkCard.querySelectorAll('button').forEach(b=>b.onclick=()=>openCam(b.dataset.cam));chat.appendChild(checkCard)}
   chat.appendChild(checkCard);
   const upd=()=>{const left=check.due-Date.now();const ready=left<=0;
-    checkCard.querySelector('.ck-title').textContent=ready?'📷 Photo check: '+(settings.name||'Ada')+' wants to see. Take it now.':'📷 Photo check in '+fmt(left);
+    const win=check.win||0, winLeft=win?check.due+win*1000-Date.now():0;
+    if(ready&&win&&!check.camAt&&winLeft<=0){missCheck();return}
+    checkCard.querySelector('.ck-title').textContent=ready?('📷 Photo check: '+(settings.name||'Ada')+' wants to see. '+(win&&!check.camAt?Math.ceil(winLeft/1000)+'s left!':'Take it now.')):'📷 Photo check in '+fmt(left);
     checkCard.querySelector('.ck-btns').hidden=!ready; checkCard.classList.toggle('ready',ready);
     checkCard.querySelectorAll('button').forEach(b=>b.classList.toggle('primary',b.dataset.cam===check.cam));
     $('status').textContent=ready?'Waiting for your photo':'Photo check in '+fmt(left);
-    if(ready){clearInterval(tick);tick=null;try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}}
+    if(ready&&!check.buzzed){check.buzzed=1;try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}}
+    if(ready&&(!win||check.camAt)){clearInterval(tick);tick=null}
     chat.scrollTop=chat.scrollHeight};
-  upd(); if(check.due>Date.now())tick=setInterval(upd,1000);
+  upd(); if(check&&(check.due>Date.now()||(check.win&&!check.camAt)))tick=setInterval(upd,250);
 }
-function openCam(cam){if(!apiKey){toast('Add your Grok key in ☰ first');return}$(cam==='back'?'camBack':'camFront').click()}
+async function missCheck(){
+  const win=check.win;clearCheck();note('⏱️ Photo check missed: no photo within '+win+' seconds');
+  if(!apiKey||busy)return;busy=true;
+  history.push({who:'me',hide:true,text:'[The page reports: I missed your photo check. I didn’t take the photo within the '+win+' seconds allowed.]'});saveHistory();
+  const t=bubble('typing…','them typing');
+  try{handleReply(t,await askGrok())}catch(e){t.remove();markLatest()}
+  busy=false;
+}
+function openCam(cam){if(!apiKey){toast('Add your Grok key in ☰ first');return}
+  if(check&&check.due<=Date.now()&&check.win&&!check.camAt){if(check.due+check.win*1000<Date.now()){missCheck();return}check.camAt=Date.now();store.set('check',check)}$(cam==='back'?'camBack':'camFront').click()}
 function shrinkData(file,max){return new Promise((res,rej)=>{const img=new Image();const u=URL.createObjectURL(file);img.onload=()=>{let w=img.naturalWidth,h=img.naturalHeight;const s=Math.min(1,max/Math.max(w,h));w=Math.round(w*s);h=Math.round(h*s);const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.8))};img.onerror=()=>{URL.revokeObjectURL(u);rej()};img.src=u})}
 async function sendPhoto(file,cam){
   if(!file||busy)return;
@@ -570,6 +584,7 @@ $('nextBtn').onclick=()=>{if(!urls.length){toast('Add photos in ☰ first');retu
 function setPhotos(on){settings.photosOn=on;store.set('photosOn',on);$('photosOn').checked=on;pos=Math.max(-1,pos-1);next()}
 $('photosOn').checked=settings.photosOn;$('photosOn').onchange=e=>setPhotos(e.target.checked);
 $('alertOn').checked=settings.alertOn;$('alertOn').onchange=e=>{settings.alertOn=e.target.checked;store.set('alertOn',settings.alertOn)};
+$('winSec').value=String(settings.winSec);$('winSec').onchange=e=>{settings.winSec=+e.target.value;store.set('winSec',settings.winSec)};
 $('buzzOn').checked=settings.buzzOn;$('buzzOn').onchange=e=>{settings.buzzOn=e.target.checked;store.set('buzzOn',settings.buzzOn)};
 $('avatar').onclick=()=>{setPhotos(!settings.photosOn);toast(settings.photosOn?'Photos on':'Photos off')};
 $('sheet').addEventListener('click',e=>{if(e.target.id==='sheet')$('lib').open=false});
@@ -626,7 +641,7 @@ $('restoreFile').addEventListener('change',async e=>{
   if(data.settings){settings=Object.assign(settings,data.settings);['onReply','onOpen','onTimer','minutes','shuffle','dim','blur','name','photosOn','bubbleA','solo'].forEach(k=>store.set(k,settings[k]))}
   if(Array.isArray(data.toys)){toys=data.toys;saveToys()}if(data.sess){sess=data.sess;store.set('sess',sess)}
   if(typeof data.persona==='string'){persona=data.persona;store.set('persona',persona);$('persona').value=persona}
-  if(Array.isArray(data.history)){history=data.history;saveHistory();chat.innerHTML='';history.forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'))}
+  if(Array.isArray(data.history)){history=data.history;saveHistory();chat.innerHTML='';history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'))}
   [['m-reply','onReply'],['m-open','onOpen'],['m-timer','onTimer']].forEach(([id,k])=>$(id).checked=!!settings[k]);$('bubbleA').value=settings.bubbleA;$('solo').checked=settings.solo;
   $('minutes').value=String(settings.minutes);$('shuffle').checked=settings.shuffle;$('dim').value=settings.dim;$('blur').value=settings.blur;$('nameInput').value=settings.name;$('photosOn').checked=settings.photosOn;
   applyLook();applyTimer();await refresh();next();
