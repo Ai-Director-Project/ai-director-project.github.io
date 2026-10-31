@@ -105,6 +105,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <p id="status">Connecting…</p>
     </div>
     <button class="iconbtn" id="sessBtn" aria-label="Session settings">♡</button>
+    <button class="iconbtn" id="toysBtn" aria-label="Toys">✦</button>
     <button class="iconbtn" id="nextBtn" aria-label="Next background">↻</button>
     <button class="iconbtn" id="openSettings" aria-label="Settings">☰</button>
   </header>
@@ -146,21 +147,6 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <p class="empty" style="margin-top:6px">Works even if After Dark is closed, for checks up to 35 minutes away. Cancelled when you send the photo or use VOIDLOCK.</p>
     </section>
 
-    <section>
-      <h3>My toys</h3>
-      <div class="row" style="margin-bottom:10px">
-        <button class="btn primary" id="pairBtn">Pair Lovense (QR code)</button>
-        <button class="btn" id="checkAll">Check connections</button>
-      </div>
-      <label class="row" style="margin-bottom:10px"><input type="checkbox" id="adaCtl" style="accent-color:var(--rose)"> Let Ada control connected Lovense toys</label>
-      <div id="toyList" class="choice"></div>
-      <div class="row" style="margin-top:8px">
-        <input id="toyName" class="btn" placeholder="Add a toy…" maxlength="40" style="flex:1;min-width:0">
-        <label class="row" style="font-size:13px"><input type="checkbox" id="toyOnline" style="accent-color:var(--rose)"> App-connected</label>
-        <button class="btn" id="toyAdd">Add</button>
-      </div>
-      <p class="empty" style="margin-top:6px">Tick <b>Wearing</b> for what's on you now, and <b>Connected</b> when an app toy is paired. Pairing still happens in its own app (Lovense Remote, TTLock). Ada uses this list to plan.</p>
-    </section>
 
     <section>
       <h3>Change background (tick any)</h3>
@@ -273,6 +259,32 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <button class="btn" id="sessUpdate">Update current session</button>
     </div>
     <p class="empty">Start fresh clears the chat. Update keeps the chat and just tells her the new settings.</p>
+  </div>
+</div>
+
+<div class="sheet-wrap" id="toysSheet" hidden>
+  <div class="sheet" role="dialog" aria-label="Toys">
+    <div class="row" style="justify-content:space-between"><h2>Toys</h2><button class="btn" id="toysClose">Done</button></div>
+    <section>
+      <h3>App toys</h3>
+      <div class="row" style="margin-bottom:10px">
+        <button class="btn primary" id="pairBtn">Pair Lovense (QR code)</button>
+        <button class="btn" id="checkAll">Check connections</button>
+      </div>
+      <label class="row" style="margin-bottom:10px"><input type="checkbox" id="adaCtl" style="accent-color:var(--rose)"> Let Ada control connected Lovense toys</label>
+      <div id="toyApp" class="choice"></div>
+    </section>
+    <section>
+      <h3>Everything else</h3>
+      <input id="toyFind" class="btn" placeholder="Search your toys…" style="width:100%;margin-bottom:8px" hidden>
+      <div id="toyList" class="choice"></div>
+      <div class="row" style="margin-top:8px">
+        <input id="toyName" class="btn" placeholder="Add a toy…" maxlength="40" style="flex:1;min-width:0">
+        <label class="row" style="font-size:13px"><input type="checkbox" id="toyOnline" style="accent-color:var(--rose)"> App-connected</label>
+        <button class="btn" id="toyAdd">Add</button>
+      </div>
+      <p class="empty" style="margin-top:6px">Tick <b>Wearing</b> for what's on you now, and <b>Connected</b> when an app toy is paired. Ada uses this list to plan.</p>
+    </section>
   </div>
 </div>
 
@@ -419,23 +431,34 @@ const STYLES=[['ai','Ada decides everything','Ada is fully in charge of where th
  ['chat','Just chat and flirt','Keep it conversational and flirty, no tasks unless he asks.']];
 let toys=store.get('toys',[{n:'Gemini',online:true,wear:false,conn:false},{n:'Hush 2',online:true,wear:false,conn:false},{n:'Tenera 2',online:true,wear:false,conn:false},{n:'Key safe',online:true,wear:false,conn:false}]);
 function saveToys(){store.set('toys',toys);renderToys()}
-function renderToys(){
-  const L=$('toyList');L.innerHTML='';
-  if(!toys.length)L.innerHTML='<p class="empty">No toys listed yet.</p>';
-  toys.forEach((t,i)=>{const d=document.createElement('div');d.className='toy';
-    d.innerHTML='<b></b>'+(t.online?'<span class="tag">app</span>':'')+'<label><input type="checkbox" class="w"> Wearing</label>'+(t.online?'<label><input type="checkbox" class="c"> Connected</label>':'')+'<button class="x" aria-label="Remove">✕</button>';
+function toyRow(t){const d=document.createElement('div');d.className='toy';
+    d.innerHTML='<b></b>'+(t.online&&!lovKey(t.n)?'<span class="tag">app</span>':'')+'<label><input type="checkbox" class="w"> Wearing</label>'+(t.online?'<label><input type="checkbox" class="c"> Connected</label>':'')+'<button class="x" aria-label="Remove">✕</button>';
     d.querySelector('b').textContent=t.n;
     const w=d.querySelector('.w');w.checked=!!t.wear;w.onchange=()=>{t.wear=w.checked;saveToys()};
     const c=d.querySelector('.c');if(c){c.checked=!!t.conn;c.onchange=()=>{t.conn=c.checked;saveToys()}}
-    d.querySelector('.x').onclick=()=>{if(confirmRemove(d)){toys.splice(i,1);saveToys()}};
-    L.appendChild(d)});
+    d.querySelector('.x').onclick=()=>{if(confirmRemove(d)){toys.splice(toys.indexOf(t),1);saveToys()}};
+    return d}
+function renderToys(){
+  const A=$('toyApp'),L=$('toyList');A.innerHTML='';L.innerHTML='';
+  const app=toys.filter(t=>t.online),rest=toys.filter(t=>!t.online);
+  if(!app.length)A.innerHTML='<p class="empty">No app toys yet.</p>';app.forEach(t=>A.appendChild(toyRow(t)));
+  const q=($('toyFind').value||'').trim().toLowerCase();$('toyFind').hidden=rest.length<8;
+  const shown=rest.filter(t=>!q||t.n.toLowerCase().includes(q)).sort((x,y)=>(y.wear-x.wear)||x.n.localeCompare(y.n));
+  if(!rest.length)L.innerHTML='<p class="empty">Add anything you use: toys, restraints, household items…</p>';
+  else if(!shown.length)L.innerHTML='<p class="empty">Nothing matches.</p>';
+  shown.forEach(t=>L.appendChild(toyRow(t)));
 }
+$('toyFind').oninput=renderToys;
+$('toysBtn').onclick=()=>{renderToys();$('toysSheet').hidden=false};
+$('toysClose').onclick=()=>{$('toysSheet').hidden=true};
+$('toysSheet').addEventListener('click',e=>{if(e.target.id==='toysSheet')$('toysSheet').hidden=true});
+$('toyName').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('toyAdd').click()}});
 function confirmRemove(d){if(d.dataset.arm){return true}d.dataset.arm=1;d.querySelector('.x').textContent='Remove?';setTimeout(()=>{if(d.isConnected){delete d.dataset.arm;d.querySelector('.x').textContent='✕'}},3000);return false}
 $('toyAdd').onclick=()=>{const n=$('toyName').value.trim();if(!n)return;toys.push({n,online:$('toyOnline').checked,wear:false,conn:false});$('toyName').value='';$('toyOnline').checked=false;saveToys()};
 renderToys();
 function renderSessToys(){const L=$('sToys');L.innerHTML='';const pick=sess.toys||[];
-  if(!toys.length){L.innerHTML='<p class="empty">Add toys in ☰ Settings first.</p>';return}
-  toys.forEach(t=>{const l=document.createElement('label');l.innerHTML='<input type="checkbox"> <span></span>';l.querySelector('span').textContent=t.n+(t.wear?' (wearing)':'')+(t.online&&t.conn?' (connected)':'');
+  if(!toys.length){L.innerHTML='<p class="empty">Add toys with the ✦ button first.</p>';return}
+  [...toys].sort((x,y)=>((y.wear||y.conn)-(x.wear||x.conn))||x.n.localeCompare(y.n)).forEach(t=>{const l=document.createElement('label');l.innerHTML='<input type="checkbox"> <span></span>';l.querySelector('span').textContent=t.n+(t.wear?' (wearing)':'')+(t.online&&t.conn?' (connected)':'');
     const c=l.querySelector('input');c.checked=pick.includes(t.n);c.dataset.n=t.n;L.appendChild(l)})}
 function readSessExtras(){sess.style=$('sStyle').value;sess.toys=[...$('sToys').querySelectorAll('input:checked')].map(c=>c.dataset.n)}
 function sessLabels(){
