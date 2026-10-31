@@ -188,6 +188,18 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     </section>
 
     <section>
+      <h3>Ada's memory about you</h3>
+      <textarea id="adaMem" rows="6" class="btn" placeholder="Empty. Load your profile file with Restore, or type here." style="width:100%;box-sizing:border-box;resize:vertical;font-size:14px;line-height:1.45"></textarea>
+      <p class="empty" style="margin-top:6px">Kept on this device only (and in your backups). Never on GitHub.</p>
+    </section>
+
+    <section>
+      <h3>Ada's notes from past sessions</h3>
+      <div id="notesList" class="choice"></div>
+      <p class="empty" style="margin-top:6px">Ada adds these herself after sessions. Tap ✕ twice to delete one.</p>
+    </section>
+
+    <section>
       <h3>Name shown at top</h3>
       <input id="nameInput" class="btn" style="width:100%;box-sizing:border-box" maxlength="30">
     </section>
@@ -358,7 +370,7 @@ function markLatest(){const ms=chat.querySelectorAll('.msg');ms.forEach(m=>m.cla
 function bubble(text,cls){const d=document.createElement('div');d.className='msg '+cls;d.textContent=text;chat.appendChild(d);markLatest();chat.scrollTop=chat.scrollHeight;return d}
 function note(text){const d=document.createElement('div');d.className='note';d.textContent=text;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
 const TAG=/\[PHOTO(?:\s+(now|\d{1,3}))?(?:\s*(?:min|mins|minutes)?)?(?:\s+(front|back))?\s*\]/i;
-function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
+function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|NOTE:[^\]]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
 history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'));
 function saveHistory(){history=history.slice(-60);store.set('history',history)}
 const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, 0 to 120, then front or back camera). Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a check comes due he only has a short window to take the photo; if he misses it the page will tell you. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
@@ -501,8 +513,23 @@ function sessStatus(){clearInterval(sessTick);const upd=()=>{if(check)return;con
   if(sess.end){const left=Math.ceil((sess.end-Date.now())/60000);$('status').textContent=left>0?base+' · '+left+' min left':base+' · time’s up'}else if(apiKey)$('status').textContent=base};
   upd();if(sess.end)sessTick=setInterval(upd,30000)}
 
+/* Ada's memory and notes (device only) */
+let adaMem=store.get('profile','');let notes=store.get('notes',[]);
+function renderNotes(){const L=$('notesList');L.innerHTML='';if(!notes.length){L.innerHTML='<p class="empty">No notes yet.</p>';return}
+  notes.slice().reverse().forEach(n=>{const d=document.createElement('div');d.className='toy';d.innerHTML='<span style="flex:1;font-size:14px"></span><button class="x" aria-label="Delete">✕</button>';
+    d.querySelector('span').textContent=n.d+': '+n.t;d.querySelector('.x').onclick=()=>{if(confirmRemove(d)){notes.splice(notes.indexOf(n),1);store.set('notes',notes);renderNotes()}};L.appendChild(d)})}
+$('adaMem').value=adaMem;$('adaMem').oninput=e=>{adaMem=e.target.value;store.set('profile',adaMem)};
+renderNotes();
+function saveNotes(reply){const found=[...String(reply).matchAll(/\[NOTE:\s*([^\]]{3,400})\]/gi)].map(m=>m[1].trim());if(!found.length)return;
+  const d=new Date().toLocaleDateString('en-CA');found.slice(0,3).forEach(t=>notes.push({d,t}));notes=notes.slice(-60);store.set('notes',notes);renderNotes();note('📝 Ada saved '+found.length+' note'+(found.length>1?'s':''))}
+const CURRENT_FACTS="\n\nCURRENT FACTS (these override anything older above):\n- This chat runs in Tim's own app. The session panel may already have given you privacy, time, arousal and direction (see session settings below). If so, don't re-ask P/T/A; just ask for W (wishes) if useful.\n- VOIDLOCK is now a persistent lockout: it stops all toys and blocks commands until Tim resets it himself. If he types VOIDLOCK the app triggers it automatically.\n- Tim removed the old intensity, duration and three-stage limits on toy commands; ignore them. Toys can only be controlled through the tags explained below, and only toys marked connected.\n- The key safe is ordered but not connected. E-stim is not connected.\n- Never give advice on medication doses or timing. If he says his medication feels too strong, suggest he speaks to his doctor.\n- With nipple clamps, build in regular breaks and have him check for numbness or colour change.\n- Quick commands KINK, MORE, EASY, SKIP, STATUS, END and VOIDLOCK work as in his instructions. On END, include [STOP] if toys may still be running.\n- Learning: after END feedback (best / less / next), or whenever you learn something worth keeping, add 1 to 3 short factual notes as [NOTE: ...]. The page hides and saves them and gives them back to you every session.";
+function memPrompt(){let t='';
+  if(adaMem.trim())t+='\n\nABOUT TIM AND HOW YOUR SESSIONS WORK (his saved instructions and memory):\n'+adaMem.trim();
+  if(notes.length)t+='\n\nYOUR NOTES FROM PAST SESSIONS (oldest first):\n'+notes.map(n=>'- '+n.d+': '+n.t).join('\n');
+  return t+CURRENT_FACTS}
+
 async function askGrok(extra){
-  const msgs=[{role:'system',content:(persona||DEFAULT_PERSONA)+PHOTO_RULES+sessPrompt()}].concat(history.slice(-KEEP).map(m=>({role:m.who==='me'?'user':'assistant',content:m.text})));
+  const msgs=[{role:'system',content:(persona||DEFAULT_PERSONA)+memPrompt()+PHOTO_RULES+sessPrompt()}].concat(history.slice(-KEEP).map(m=>({role:m.who==='me'?'user':'assistant',content:m.text})));
   if(extra)msgs.push(extra);
   const call=async model=>fetch('https://api.x.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},body:JSON.stringify({model,messages:msgs,max_tokens:600})});
   let r=await call(MODEL);
@@ -520,9 +547,11 @@ function handleReply(t,reply){
   if(m){const mins=(!m[1]||m[1].toLowerCase()==='now')?0:Math.min(120,parseInt(m[1],10));setCheck(Date.now()+mins*60000,(m[2]||'front').toLowerCase())}
   if(settings.onReply)next();
   runToyTags(reply);
+  saveNotes(reply);
 }
 async function send(){
   const v=$('input').value.trim(); if(!v||busy)return;
+  if(/^\s*voidlock\s*[.!]*\s*$/i.test(v)){$('void').click()}
   if(!apiKey){toast('Add your Grok key in ☰ first');$('sheet').hidden=false;return}
   busy=true; history.push({who:'me',text:v}); saveHistory(); bubble(v,'me'); $('input').value=''; autosize();
   const t=bubble('typing…','them typing');
@@ -648,7 +677,7 @@ async function dataToBlob(d){const r=await fetch(d);return r.blob()}
 $('backupBtn').onclick=async()=>{
   toast('Making backup…');
   const pics=[];for(const p of photos){const d=await blobToData(p.blob);if(d)pics.push(d)}
-  const data={app:'afterdark',version:1,saved:new Date().toISOString(),settings,persona,history,toys,sess,photos:pics};
+  const data={app:'afterdark',version:1,saved:new Date().toISOString(),settings,persona,history,toys,sess,profile:adaMem,notes,photos:pics};
   const day=new Date().toISOString().slice(0,10);
   const file=new File([JSON.stringify(data)],'after-dark-backup-'+day+'.json',{type:'application/json'});
   try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'After Dark backup'});toast('Backup ready');return}}catch(e){if(e&&e.name==='AbortError'){toast('Backup cancelled');return}}
@@ -662,13 +691,15 @@ $('restoreFile').addEventListener('change',async e=>{
   toast('Restoring…');
   if(Array.isArray(data.photos)&&db){for(const p of photos)await delPhoto(p.id);for(const d of data.photos){try{await addPhoto(await dataToBlob(d))}catch(err){}}}
   if(data.settings){settings=Object.assign(settings,data.settings);['onReply','onOpen','onTimer','minutes','shuffle','dim','blur','name','photosOn','bubbleA','solo'].forEach(k=>store.set(k,settings[k]))}
-  if(Array.isArray(data.toys)){toys=data.toys;saveToys()}if(data.sess){sess=data.sess;store.set('sess',sess)}
+  if(typeof data.profile==='string'){adaMem=data.profile;store.set('profile',adaMem);$('adaMem').value=adaMem}
+  if(Array.isArray(data.notes)&&(data.kind!=='profile'||!notes.length)){notes=data.notes;store.set('notes',notes);renderNotes()}
+  if(Array.isArray(data.toys)){if(data.kind==='profile'){data.toys.forEach(t=>{if(!toys.some(x=>x.n.toLowerCase()===t.n.toLowerCase()))toys.push(t)});saveToys()}else{toys=data.toys;saveToys()}}if(data.sess){sess=data.sess;store.set('sess',sess)}
   if(typeof data.persona==='string'){persona=data.persona;store.set('persona',persona);$('persona').value=persona}
   if(Array.isArray(data.history)){history=data.history;saveHistory();chat.innerHTML='';history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'))}
   [['m-reply','onReply'],['m-open','onOpen'],['m-timer','onTimer']].forEach(([id,k])=>$(id).checked=!!settings[k]);$('bubbleA').value=settings.bubbleA;$('solo').checked=settings.solo;
   $('minutes').value=String(settings.minutes);$('shuffle').checked=settings.shuffle;$('dim').value=settings.dim;$('blur').value=settings.blur;$('nameInput').value=settings.name;$('photosOn').checked=settings.photosOn;
   applyLook();applyTimer();await refresh();next();
-  toast('Restored '+photos.length+' photos and your chat');
+  toast(data.kind==='profile'?'Ada\u2019s profile loaded':'Restored '+photos.length+' photos and your chat');
 });
 
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&settings.onOpen)next()});
