@@ -110,7 +110,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
   </header>
 
   <main class="chat" id="chat" aria-live="polite">
-    <div class="note">Chat only for now. Lock and toys come next.</div>
+    
   </main>
 
   <div class="cam-menu" id="camMenu" hidden><button class="btn" data-cam="front">Front camera</button><button class="btn" data-cam="back">Back camera</button></div>
@@ -146,6 +146,11 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 
     <section>
       <h3>My toys</h3>
+      <div class="row" style="margin-bottom:10px">
+        <button class="btn primary" id="pairBtn">Pair Lovense (QR code)</button>
+        <button class="btn" id="checkAll">Check connections</button>
+      </div>
+      <label class="row" style="margin-bottom:10px"><input type="checkbox" id="adaCtl" style="accent-color:var(--rose)"> Let Ada control connected Lovense toys</label>
       <div id="toyList" class="choice"></div>
       <div class="row" style="margin-top:8px">
         <input id="toyName" class="btn" placeholder="Add a toy…" maxlength="40" style="flex:1;min-width:0">
@@ -269,12 +274,26 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
   </div>
 </div>
 
+<div class="sheet-wrap" id="qr" hidden>
+  <div class="sheet" role="dialog" aria-label="Pair Lovense">
+    <div class="row" style="justify-content:space-between"><h2>Pair Lovense</h2><button class="btn" id="qrClose">Done</button></div>
+    <p class="empty" id="qrMsg">Getting a QR code…</p>
+    <img id="qrImg" alt="Lovense pairing QR code" style="width:min(70vw,280px);align-self:center;background:#fff;border-radius:12px;padding:8px" hidden>
+    <ol class="empty" style="margin:0;padding-left:18px;line-height:1.6">
+      <li>Make sure your toys are on and connected in <b>Lovense Remote</b>.</li>
+      <li><b>Screenshot</b> this QR code.</li>
+      <li>In Lovense Remote: <b>+</b> → <b>Scan QR</b> → Photos icon → pick the screenshot.</li>
+      <li>Then tap <b>Check connections</b> in Settings.</li>
+    </ol>
+  </div>
+</div>
+
 <div class="toast" id="toast" hidden></div>
 
 <script>
 const $=id=>document.getElementById(id);
 const store={get(k,d){try{const v=localStorage.getItem('ad_'+k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('ad_'+k,JSON.stringify(v))}catch(e){}}};
-let settings={onReply:store.get('onReply',store.get('mode','reply')==='reply'),onOpen:store.get('onOpen',store.get('mode','reply')==='open'),onTimer:store.get('onTimer',store.get('mode','reply')==='timer'),bubbleA:store.get('bubbleA',20),solo:store.get('solo',true),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:(n=>(!n||n==='Grok')?'Ada':n)(store.get('name','Ada')),photosOn:store.get('photosOn',true),alertOn:store.get('alertOn',true),buzzOn:store.get('buzzOn',false)};
+let settings={onReply:store.get('onReply',store.get('mode','reply')==='reply'),onOpen:store.get('onOpen',store.get('mode','reply')==='open'),onTimer:store.get('onTimer',store.get('mode','reply')==='timer'),bubbleA:store.get('bubbleA',20),solo:store.get('solo',true),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:(n=>(!n||n==='Grok')?'Ada':n)(store.get('name','Ada')),photosOn:store.get('photosOn',true),alertOn:store.get('alertOn',true),adaCtl:store.get('adaCtl',true),buzzOn:store.get('buzzOn',false)};
 let photos=[]; let urls=[]; let order=[]; let pos=-1; let layer=0; let timer=null;
 
 function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,3200)}
@@ -313,9 +332,9 @@ function applyLook(){document.documentElement.style.setProperty('--ba',(settings
 function applyTimer(){clearInterval(timer);if(settings.onTimer)timer=setInterval(next,settings.minutes*60000)}
 
 /* chat via Make -> Grok */
-const DEFAULT_PERSONA="You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. You can't control his lock or toys yet, so don't pretend to.";
-const OLD_PERSONA="You are Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. You can't control his lock or toys yet, so don't pretend to.";
-let persona=store.get('persona',DEFAULT_PERSONA);if(persona===OLD_PERSONA){persona=DEFAULT_PERSONA;store.set('persona',persona)}
+const DEFAULT_PERSONA="You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. Only claim to control a toy when the page tells you it is connected; never pretend.";
+const OLD_PERSONAS=["You are Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. You can't control his lock or toys yet, so don't pretend to.","You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. You can't control his lock or toys yet, so don't pretend to."];
+let persona=store.get('persona',DEFAULT_PERSONA);if(OLD_PERSONAS.includes(persona)){persona=DEFAULT_PERSONA;store.set('persona',persona)}
 let history=store.get('history',[]);
 const MODEL='grok-4.20-0309-non-reasoning', KEEP=20;
 let apiKey=store.get('key','');
@@ -325,10 +344,55 @@ function markLatest(){const ms=chat.querySelectorAll('.msg');ms.forEach(m=>m.cla
 function bubble(text,cls){const d=document.createElement('div');d.className='msg '+cls;d.textContent=text;chat.appendChild(d);markLatest();chat.scrollTop=chat.scrollHeight;return d}
 function note(text){const d=document.createElement('div');d.className='note';d.textContent=text;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
 const TAG=/\[PHOTO(?:\s+(now|\d{1,3}))?(?:\s*(?:min|mins|minutes)?)?(?:\s+(front|back))?\s*\]/i;
-function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').trim()}
+function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
 history.forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'));
 function saveHistory(){history=history.slice(-60);store.set('history',history)}
 const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, 0 to 120, then front or back camera). Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
+/* toy bridge (Make) */
+const TOY_HOOK='https://hook.eu1.make.com/5ln4unqvf8sxitfag4kgwhrs1sapl82y';
+function lovKey(n){n=String(n).toLowerCase();return n.includes('gemini')?'GEMINI':n.includes('hush')?'HUSH':n.includes('tenera')?'TENERA':null}
+async function toyCall(f){
+  try{const r=await fetch(TOY_HOOK,{method:'POST',body:new URLSearchParams(f)});const t=await r.text();
+    try{return JSON.parse(t)}catch(e){return {raw:t}}}
+  catch(e){return {neterr:true}}
+}
+function toyOk(r){return r&&(r.success===true||r.success==='true'||r.code===200)}
+function toyWhy(r){if(!r)return 'no answer';if(r.neterr)return 'couldn\u2019t reach Make';if(r.raw)return /accepted/i.test(r.raw)?'not run (locked by VOIDLOCK, or the toy is offline)':r.raw.slice(0,80);return r.message||r.error||('code '+r.code)}
+let toyLog=[];
+function logToy(t){toyLog.push(new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+' '+t);toyLog=toyLog.slice(-6)}
+async function checkToy(t){const k=lovKey(t.n);if(!k)return null;
+  const r=await toyCall({action:k+'_VIBRATE',confirmation:'YES',intensity:'0',duration_s:'1'});
+  t.conn=toyOk(r);saveToys();return [t.n,t.conn,toyWhy(r)]}
+$('checkAll').onclick=async()=>{const list=toys.filter(t=>lovKey(t.n));if(!list.length){toast('No Lovense toys in your list');return}
+  toast('Checking…');const res=[];for(const t of list)res.push(await checkToy(t));
+  toast(res.map(([n,ok,why])=>n+': '+(ok?'connected ✓':'not connected')).join(' · '))};
+$('pairBtn').onclick=async()=>{$('qrImg').hidden=true;$('qrMsg').textContent='Getting a QR code…';$('qr').hidden=false;
+  const r=await toyCall({action:'GEMINI_CONNECT',confirmation:'YES'});
+  if(r&&r.pairing_url){$('qrImg').src=r.pairing_url;$('qrImg').hidden=false;$('qrMsg').textContent='Scan this with Lovense Remote. One scan connects all the toys in that app.'}
+  else $('qrMsg').textContent='Couldn\u2019t get a QR code ('+toyWhy(r)+'). Try again in a moment.'};
+$('qrClose').onclick=()=>{$('qr').hidden=true};
+$('adaCtl').checked=settings.adaCtl;$('adaCtl').onchange=e=>{settings.adaCtl=e.target.checked;store.set('adaCtl',settings.adaCtl)};
+const TOYTAG=/\[(?:TOY\s+(\w[\w ]*?)\s+(?:(preset)\s+(pulse|wave|fireworks|earthquake)\s+(\d{1,3})|(pattern)\s+([\d;]+)\s+(\d{3,5})\s+(\d{1,3})|(\d{1,2})\s+(\d{1,3}))|(STOP))\s*\]/gi;
+function connectedLov(){return toys.filter(t=>lovKey(t.n)&&t.conn)}
+function toyRules(){
+  const c=connectedLov();if(!settings.adaCtl||!c.length)return '\n- You cannot switch app toys on or off from this chat right now, so tell him what to do with them instead. Only suggest toys he has.';
+  return '\n\nToy control: you CAN control these connected toys: '+c.map(t=>t.n).join(', ')+'. Put a tag anywhere in your message; the page hides it and runs it:\n[TOY Gemini 8 20] = vibrate Gemini at level 8 (0-20) for 20 seconds (max 300).\n[TOY Gemini preset wave 30] = built-in pattern (pulse, wave, fireworks, earthquake) for 30 seconds. Gemini only.\n[TOY Gemini pattern 2;5;8;12 3000 12] = custom steps (levels 0-20 separated by ;), milliseconds per step, total seconds. Gemini only.\n[STOP] = stop all toys.\nHush 2 and Tenera 2 support only the plain vibrate tag. Use at most two toy tags per message. Results of recent commands: '+(toyLog.length?toyLog.join('; '):'none yet')+'.';
+}
+async function runToyTags(reply){
+  if(!settings.adaCtl)return;const tags=[...reply.matchAll(TOYTAG)].slice(0,2);
+  for(const m of tags){
+    let f,label;
+    if(m[11]){f={action:'GEMINI_STOP'};label='All toys stopped'}
+    else{const t=toys.find(x=>x.conn&&lovKey(x.n)===lovKey(m[1]||''));if(!t){logToy((m[1]||'?')+' not connected, skipped');note((m[1]||'Toy')+' isn\u2019t connected');continue}
+      const k=lovKey(t.n);
+      if(m[2]){if(k!=='GEMINI')continue;const sec=Math.min(300,+m[4]||10);f={action:'GEMINI_PRESET',confirmation:'YES',name:m[3].toLowerCase(),duration_s:String(sec)};label=t.n+': '+m[3].toLowerCase()+' for '+sec+'s'}
+      else if(m[5]){if(k!=='GEMINI')continue;const sec=Math.min(300,+m[8]||10);f={action:'GEMINI_PATTERN',confirmation:'YES',strengths:m[6].split(';').map(x=>Math.min(20,+x||0)).join(';'),interval_ms:String(Math.max(100,+m[7])),duration_s:String(sec)};label=t.n+': pattern for '+sec+'s'}
+      else{const lvl=Math.min(20,+m[9]||0),sec=Math.min(300,Math.max(1,+m[10]||5));f={action:k+'_VIBRATE',confirmation:'YES',intensity:String(lvl),duration_s:String(sec)};label=t.n+': level '+lvl+' for '+sec+'s'}}
+    const r=await toyCall(f);const ok=toyOk(r);logToy(label+(ok?' (done)':' (failed: '+toyWhy(r)+')'));
+    note((ok?'💗 ':'⚠️ ')+label+(ok?'':' — '+toyWhy(r)));
+  }
+}
+
 /* session settings */
 const MOODS=['Sweet','Warm and playful','Teasing','Strict','Mean'];
 const MOOD_TXT=['Be very sweet, gentle, affectionate and encouraging. No harshness at all.',
@@ -381,7 +445,7 @@ function sessLabels(){
 function sessPrompt(){
   const st=STYLES.find(x=>x[0]===(sess.style||'ai'))||STYLES[0];
   const have=toys.map(t=>t.n+(t.wear?' [wearing now]':'')+(t.online?(t.conn?' [app toy, connected]':' [app toy, not connected]'):'')).join(', ')||'none listed';
-  let t='\n\nCurrent session settings (chosen by Tim, follow them):\n- Your mood: '+MOOD_TXT[sess.mood-1]+'\n- Privacy: '+PRIV_TXT[sess.priv-1]+'\n- His arousal when he set this: '+sess.aro+' out of 10. Match your pace to it, and you can ask how it has changed.'+'\n- Direction: '+st[2]+'\n- Toys he has: '+have+'.'+((sess.toys&&sess.toys.length)?'\n- Toys he chose for this session: '+sess.toys.join(', ')+'.':'\n- He left the choice of toys to you.')+'\n- You cannot switch app toys on or off from this chat yet, so tell him what to do with them instead. Only suggest toys he has.';
+  let t='\n\nCurrent session settings (chosen by Tim, follow them):\n- Your mood: '+MOOD_TXT[sess.mood-1]+'\n- Privacy: '+PRIV_TXT[sess.priv-1]+'\n- His arousal when he set this: '+sess.aro+' out of 10. Match your pace to it, and you can ask how it has changed.'+'\n- Direction: '+st[2]+'\n- Toys he has: '+have+'.'+((sess.toys&&sess.toys.length)?'\n- Toys he chose for this session: '+sess.toys.join(', ')+'.':'\n- He left the choice of toys to you.')+toyRules();
   if(sess.end){const left=Math.round((sess.end-Date.now())/60000);
     t+=left>0?'\n- Session length: '+LENS[sess.len]+' minutes, about '+left+' minutes left. Pace things to fit, and start wrapping up in the last few minutes.':'\n- The planned session time is over. Wrap up warmly now unless he asks for more.';}
   else t+='\n- Session length: open-ended.';
@@ -430,6 +494,7 @@ function handleReply(t,reply){
   const m=reply.match(TAG);
   if(m){const mins=(!m[1]||m[1].toLowerCase()==='now')?0:Math.min(120,parseInt(m[1],10));setCheck(Date.now()+mins*60000,(m[2]||'front').toLowerCase())}
   if(settings.onReply)next();
+  runToyTags(reply);
 }
 async function send(){
   const v=$('input').value.trim(); if(!v||busy)return;
@@ -496,7 +561,11 @@ $('persona').value=persona;
 $('persona').oninput=e=>{persona=e.target.value;store.set('persona',persona)};
 $('resetPersona').onclick=()=>{persona=DEFAULT_PERSONA;$('persona').value=persona;store.set('persona',persona);toast('Default personality restored')};
 $('newChat').onclick=()=>{$('sheet').hidden=true;openSess(true)};
-$('void').onclick=()=>{if(check)clearCheck();toast('Photo check cancelled. VOIDLOCK for the lock and toys isn’t connected here yet. Use your normal VOIDLOCK.')};
+$('void').onclick=async()=>{if(check)clearCheck();note('VOIDLOCK sent…');
+  const r=await toyCall({action:'VOIDLOCK'});const ok=toyOk(r)||(r&&r.lock_write_confirmed);
+  logToy('VOIDLOCK used: everything stopped and locked');
+  note(ok?'🔒 VOIDLOCK: toys stopped and locked. Use your Reset button to unlock.':'⚠️ VOIDLOCK sent, but not confirmed ('+toyWhy(r)+'). Use the off buttons or Lovense Remote too.');
+  toast(ok?'VOIDLOCK done':'VOIDLOCK not confirmed — use the off buttons')};
 $('nextBtn').onclick=()=>{if(!urls.length){toast('Add photos in ☰ first');return}if(!settings.photosOn){toast('Photos are off. Tap the round icon to turn them on.');return}next()};
 function setPhotos(on){settings.photosOn=on;store.set('photosOn',on);$('photosOn').checked=on;pos=Math.max(-1,pos-1);next()}
 $('photosOn').checked=settings.photosOn;$('photosOn').onchange=e=>setPhotos(e.target.checked);
