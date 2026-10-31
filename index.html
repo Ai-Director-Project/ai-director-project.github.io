@@ -488,16 +488,21 @@ function sessPrompt(){
   else t+='\n- Session length: open-ended.';
   return t;
 }
+function sessLocked(){return !!sess.start&&(!sess.end||Date.now()<sess.end)}
 function openSess(fresh){
   $('sessTitle').textContent=fresh?'New session':'This session';
   $('sMood').value=sess.mood;$('sPriv').value=sess.priv;$('sLen').value=sess.len;$('sAro').value=sess.aro;sessLabels();
   $('sStyle').innerHTML=STYLES.map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join('');$('sStyle').value=sess.style||'ai';renderSessToys();
+  const lock=!fresh&&sessLocked();
+  ['sMood','sLen'].forEach(id=>{$(id).disabled=lock;$(id).style.opacity=lock?.4:1});
+  if(lock){$('sMoodL').textContent+=' · 🔒 locked until this session ends';$('sLenL').textContent+=' · 🔒 locked';}
   $('sessUpdate').hidden=!!fresh;$('sess').hidden=false;
 }
 function applySess(){
   readSessExtras();
-  sess.mood=+$('sMood').value;sess.priv=+$('sPriv').value;sess.aro=+$('sAro').value;
-  const newLen=+$('sLen').value;
+  const lockNow=$('sMood').disabled;
+  if(!lockNow)sess.mood=+$('sMood').value;sess.priv=+$('sPriv').value;sess.aro=+$('sAro').value;
+  const newLen=lockNow?sess.len:+$('sLen').value;
   if(newLen!==sess.len||!sess.start){sess.len=newLen;sess.start=Date.now();sess.end=LENS[newLen]?Date.now()+LENS[newLen]*60000:0}
   store.set('sess',sess);sessStatus();
 }
