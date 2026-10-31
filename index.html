@@ -94,9 +94,9 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 
 <div class="app">
   <header>
-    <button class="avatar" id="avatar" aria-label="Photos on or off" style="border:none;padding:0">G</button>
+    <button class="avatar" id="avatar" aria-label="Photos on or off" style="border:none;padding:0">A</button>
     <div class="who">
-      <h1 id="name">Grok</h1>
+      <h1 id="name">Ada</h1>
       <p id="status">Connecting…</p>
     </div>
     <button class="iconbtn" id="nextBtn" aria-label="Next background">↻</button>
@@ -162,7 +162,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <span>Message boxes: clear ← → solid</span>
       <input type="range" id="bubbleA" min="0" max="90" step="5">
       <label class="row" style="margin-top:8px"><input type="checkbox" id="solo" style="accent-color:var(--rose)"> Only show the latest message</label>
-      <p class="empty">Older messages are hidden, not deleted. Grok still remembers them.</p>
+      <p class="empty">Older messages are hidden, not deleted. She still remembers them.</p>
     </section>
 
     <section>
@@ -172,7 +172,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     </section>
 
     <section>
-      <h3>Grok's personality</h3>
+      <h3>Her personality</h3>
       <textarea id="persona" rows="7" class="btn" style="width:100%;box-sizing:border-box;resize:vertical;font-size:15px;line-height:1.5"></textarea>
       <div class="row" style="margin-top:8px"><button class="btn" id="resetPersona">Use the default</button><button class="btn warn" id="newChat">Start a fresh chat</button></div>
     </section>
@@ -214,7 +214,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 <script>
 const $=id=>document.getElementById(id);
 const store={get(k,d){try{const v=localStorage.getItem('ad_'+k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('ad_'+k,JSON.stringify(v))}catch(e){}}};
-let settings={onReply:store.get('onReply',store.get('mode','reply')==='reply'),onOpen:store.get('onOpen',store.get('mode','reply')==='open'),onTimer:store.get('onTimer',store.get('mode','reply')==='timer'),bubbleA:store.get('bubbleA',20),solo:store.get('solo',true),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:store.get('name','Grok'),photosOn:store.get('photosOn',true),alertOn:store.get('alertOn',true),buzzOn:store.get('buzzOn',false)};
+let settings={onReply:store.get('onReply',store.get('mode','reply')==='reply'),onOpen:store.get('onOpen',store.get('mode','reply')==='open'),onTimer:store.get('onTimer',store.get('mode','reply')==='timer'),bubbleA:store.get('bubbleA',20),solo:store.get('solo',true),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:(n=>(!n||n==='Grok')?'Ada':n)(store.get('name','Ada')),photosOn:store.get('photosOn',true),alertOn:store.get('alertOn',true),buzzOn:store.get('buzzOn',false)};
 let photos=[]; let urls=[]; let order=[]; let pos=-1; let layer=0; let timer=null;
 
 function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,3200)}
@@ -249,12 +249,13 @@ function renderThumbs(){
   photos.forEach((p,i)=>{const d=document.createElement('div');d.className='thumb';d.style.backgroundImage=`url("${urls[i]}")`;const b=document.createElement('button');b.textContent='✕';b.setAttribute('aria-label','Remove photo');b.onclick=async()=>{await delPhoto(p.id);await refresh();next()};d.appendChild(b);t.appendChild(d)});
 }
 
-function applyLook(){document.documentElement.style.setProperty('--ba',(settings.bubbleA||0)/100);$('chat').classList.toggle('solo',!!settings.solo);document.documentElement.style.setProperty('--dim',settings.dim/100);document.documentElement.style.setProperty('--blur',settings.blur+'px');$('name').textContent=settings.name||'Grok'}
+function applyLook(){document.documentElement.style.setProperty('--ba',(settings.bubbleA||0)/100);$('chat').classList.toggle('solo',!!settings.solo);document.documentElement.style.setProperty('--dim',settings.dim/100);document.documentElement.style.setProperty('--blur',settings.blur+'px');$('name').textContent=settings.name||'Ada';$('avatar').textContent=(settings.name||'Ada').trim().charAt(0).toUpperCase()||'A'}
 function applyTimer(){clearInterval(timer);if(settings.onTimer)timer=setInterval(next,settings.minutes*60000)}
 
 /* chat via Make -> Grok */
-const DEFAULT_PERSONA="You are Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. You can't control his lock or toys yet, so don't pretend to.";
-let persona=store.get('persona',DEFAULT_PERSONA);
+const DEFAULT_PERSONA="You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. You can't control his lock or toys yet, so don't pretend to.";
+const OLD_PERSONA="You are Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. You can't control his lock or toys yet, so don't pretend to.";
+let persona=store.get('persona',DEFAULT_PERSONA);if(persona===OLD_PERSONA){persona=DEFAULT_PERSONA;store.set('persona',persona)}
 let history=store.get('history',[]);
 const MODEL='grok-4.20-0309-non-reasoning', KEEP=20;
 let apiKey=store.get('key','');
@@ -307,13 +308,13 @@ function setCheck(due,cam){
   const delay=Math.round((due-Date.now())/1000);
   if(settings.alertOn&&delay>=20&&delay<=2100)alertMake({action:'PHOTO_CHECK_START',request_id:id,delay_s:String(delay),buzz:settings.buzzOn?'yes':'no'});
 }
-function clearCheck(){if(check&&check.id&&check.due>Date.now()-60000)alertMake({action:'PHOTO_CHECK_CANCEL'});check=null;store.set('check',null);if(checkCard){checkCard.remove();checkCard=null}clearInterval(tick);tick=null;$('status').textContent=apiKey?'Grok · online':'Add your key in ☰'}
+function clearCheck(){if(check&&check.id&&check.due>Date.now()-60000)alertMake({action:'PHOTO_CHECK_CANCEL'});check=null;store.set('check',null);if(checkCard){checkCard.remove();checkCard=null}clearInterval(tick);tick=null;$('status').textContent=apiKey?(settings.name||'Ada')+' · online':'Add your key in ☰'}
 function renderCheck(){
   clearInterval(tick); if(!check)return;
   if(!checkCard){checkCard=document.createElement('div');checkCard.className='checkcard';checkCard.innerHTML='<div class="ck-title"></div><div class="row ck-btns" hidden><button class="btn primary" data-cam="front">Front camera</button><button class="btn primary" data-cam="back">Back camera</button></div>';checkCard.querySelectorAll('button').forEach(b=>b.onclick=()=>openCam(b.dataset.cam));chat.appendChild(checkCard)}
   chat.appendChild(checkCard);
   const upd=()=>{const left=check.due-Date.now();const ready=left<=0;
-    checkCard.querySelector('.ck-title').textContent=ready?'📷 Photo check: Grok wants to see. Take it now.':'📷 Photo check in '+fmt(left);
+    checkCard.querySelector('.ck-title').textContent=ready?'📷 Photo check: '+(settings.name||'Ada')+' wants to see. Take it now.':'📷 Photo check in '+fmt(left);
     checkCard.querySelector('.ck-btns').hidden=!ready; checkCard.classList.toggle('ready',ready);
     checkCard.querySelectorAll('button').forEach(b=>b.classList.toggle('primary',b.dataset.cam===check.cam));
     $('status').textContent=ready?'Waiting for your photo':'Photo check in '+fmt(left);
@@ -327,7 +328,7 @@ async function sendPhoto(file,cam){
   if(!file||busy)return;
   let data;try{data=await shrinkData(file,1280)}catch(e){toast('Couldn’t read that photo. Try again.');return}
   busy=true; const wasCheck=!!check; const mins=wasCheck&&checkSetAt?Math.round((Date.now()-checkSetAt)/60000):null;
-  bubble('📷 Photo sent','me'); const t=bubble('Grok is looking…','them typing');
+  bubble('📷 Photo sent','me'); const t=bubble((settings.name||'Ada')+' is looking…','them typing');
   const info=(wasCheck?'Here is my photo for the photo check':'Here is a photo')+' ('+(cam==='back'?'back':'front')+' camera'+(mins!==null?', '+mins+' min after you set the check':'')+'). Check it carefully.';
   try{
     const reply=await askGrok({role:'user',content:[{type:'image_url',image_url:{url:data,detail:'high'}},{type:'text',text:info}]});
@@ -347,7 +348,7 @@ function autosize(){const i=$('input');i.style.height='auto';i.style.height=Math
 $('send').onclick=send;
 $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
 $('input').addEventListener('input',autosize);
-$('apiKey').value=apiKey;$('apiKey').oninput=e=>{apiKey=e.target.value.trim();store.set('key',apiKey);$('status').textContent=apiKey?'Grok · online':'Add your key in ☰'};
+$('apiKey').value=apiKey;$('apiKey').oninput=e=>{apiKey=e.target.value.trim();store.set('key',apiKey);$('status').textContent=apiKey?(settings.name||'Ada')+' · online':'Add your key in ☰'};
 $('persona').value=persona;
 $('persona').oninput=e=>{persona=e.target.value;store.set('persona',persona)};
 $('resetPersona').onclick=()=>{persona=DEFAULT_PERSONA;$('persona').value=persona;store.set('persona',persona);toast('Default personality restored')};
@@ -424,7 +425,7 @@ $('restoreFile').addEventListener('change',async e=>{
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&settings.onOpen)next()});
 
 (async()=>{applyLook();await openDB();await refresh();next();applyTimer()})();
-$('status').textContent=apiKey?'Grok · online':'Add your key in ☰';
+$('status').textContent=apiKey?(settings.name||'Ada')+' · online':'Add your key in ☰';
 if(check)renderCheck();
 </script>
 </body>
