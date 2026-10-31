@@ -178,6 +178,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     <section>
       <h3>Grok key</h3>
       <input id="apiKey" class="btn" type="password" autocomplete="off" placeholder="Paste your xAI API key" style="width:100%;box-sizing:border-box">
+      <div class="row" style="margin-top:8px"><button class="btn" id="keyShow">Show</button><button class="btn" id="keyCopy">Copy key</button></div>
       <p class="empty" style="margin-top:6px">Saved on this phone only.</p>
     </section>
 
@@ -633,6 +634,8 @@ function autosize(){const i=$('input');i.style.height='auto';i.style.height=Math
 $('send').onclick=send;
 $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
 $('input').addEventListener('input',autosize);
+$('keyShow').onclick=()=>{const i=$('apiKey');const sh=i.type==='password';i.type=sh?'text':'password';$('keyShow').textContent=sh?'Hide':'Show'};
+$('keyCopy').onclick=async()=>{if(!apiKey){toast('No key saved yet');return}try{await navigator.clipboard.writeText(apiKey);toast('Key copied')}catch(e){const i=$('apiKey');i.type='text';$('keyShow').textContent='Hide';i.focus();i.select();toast('Tap and hold the key, then Copy')}};
 $('apiKey').value=apiKey;$('apiKey').oninput=e=>{apiKey=e.target.value.trim();store.set('key',apiKey);$('status').textContent=apiKey?(settings.name||'Ada')+' · online':'Add your key in ☰'};
 $('persona').value=persona;
 $('persona').oninput=e=>{persona=e.target.value;store.set('persona',persona)};
