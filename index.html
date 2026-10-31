@@ -54,6 +54,7 @@ header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-top:c
 .typing{opacity:.7;font-style:italic}
 .composer{display:flex;gap:8px;align-items:flex-end;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:rgba(20,8,14,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line)}
 .composer textarea{flex:1;min-width:0;resize:none;max-height:120px;background:rgba(255,255,255,.08);border:1px solid var(--line);color:var(--ink);border-radius:20px;padding:10px 14px;font:inherit;font-size:16px}
+.lockbar{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 16px;background:rgba(90,20,30,.85);border-top:1px solid var(--line);font-size:14px}
 .checkcard{align-self:stretch;background:rgba(40,16,26,.85);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .checkcard.ready{border-color:var(--rose)}
 .ck-title{font-weight:600}
@@ -114,6 +115,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     
   </main>
 
+  <div class="lockbar" id="lockBar" hidden><span>🔒 Toys locked by VOIDLOCK</span><button class="btn" id="unlockBtn">Unlock</button></div>
   <div class="cam-menu" id="camMenu" hidden><button class="btn" data-cam="front">Front camera</button><button class="btn" data-cam="back">Back camera</button></div>
   <div class="composer">
     <button class="send cam" id="camBtn" aria-label="Send a photo">📷</button>
@@ -402,6 +404,7 @@ $('adaCtl').checked=settings.adaCtl;$('adaCtl').onchange=e=>{settings.adaCtl=e.t
 const TOYTAG=/\[(?:TOY\s+(\w[\w ]*?)\s+(?:(preset)\s+(pulse|wave|fireworks|earthquake)\s+(\d{1,3})|(pattern)\s+([\d;]+)\s+(\d{3,5})\s+(\d{1,3})|(\d{1,2})\s+(\d{1,3}))|(STOP))\s*\]/gi;
 function connectedLov(){return toys.filter(t=>lovKey(t.n)&&t.conn)}
 function toyRules(){
+  if(locked)return '\n- VOIDLOCK is active: all toys are stopped and locked. You cannot control any toy until Tim unlocks it himself. Don\u2019t ask him to unlock.';
   const c=connectedLov();if(!settings.adaCtl||!c.length)return '\n- You cannot switch app toys on or off from this chat right now, so tell him what to do with them instead. Only suggest toys he has.';
   return '\n\nToy control: you CAN control these connected toys: '+c.map(t=>t.n).join(', ')+'. Put a tag anywhere in your message; the page hides it and runs it:\n[TOY Gemini 8 20] = vibrate Gemini at level 8 (0-20) for 20 seconds (max 300).\n[TOY Gemini preset wave 30] = built-in pattern (pulse, wave, fireworks, earthquake) for 30 seconds. Gemini only.\n[TOY Gemini pattern 2;5;8;12 3000 12] = custom steps (levels 0-20 separated by ;), milliseconds per step, total seconds. Gemini only.\n[STOP] = stop all toys.\nHush 2 and Tenera 2 support only the plain vibrate tag. Use at most two toy tags per message. Results of recent commands: '+(toyLog.length?toyLog.join('; '):'none yet')+'.';
 }
@@ -419,6 +422,23 @@ async function runToyTags(reply){
     note((ok?'💗 ':'⚠️ ')+label+(ok?'':' — '+toyWhy(r)));
   }
 }
+
+/* VOIDLOCK lock state and unlock (human only; Ada's tags can't reach this) */
+const RESET_HOOK='https://hook.eu1.make.com/rbi4y93a2dilh9qxmgc77c6nnyy51ewo';
+let locked=store.get('locked',false);
+function showLock(){$('lockBar').hidden=!locked;$('unlockBtn').textContent='Unlock'}
+let unlockArmed=false;
+$('unlockBtn').onclick=async()=>{
+  if(!unlockArmed){unlockArmed=true;$('unlockBtn').textContent='Tap again to unlock';setTimeout(()=>{unlockArmed=false;if(locked)$('unlockBtn').textContent='Unlock'},3000);return}
+  unlockArmed=false;$('unlockBtn').textContent='Unlocking…';
+  try{await fetch(RESET_HOOK,{method:'POST',mode:'no-cors',body:new URLSearchParams({action:'RESET'})})}catch(e){}
+  await new Promise(r=>setTimeout(r,1500));
+  const st=await toyCall({action:'SAFETY_STATUS'});
+  if(st&&st.state&&st.state!=='LOCKED'){locked=false;store.set('locked',false);showLock();note('🔓 Unlocked. Toys can be used again.');logToy('Tim unlocked after VOIDLOCK')}
+  else if(st&&st.state==='LOCKED'){$('unlockBtn').textContent='Unlock';toast('Still locked. Try again, or use your Reset link.')}
+  else{locked=false;store.set('locked',false);showLock();note('🔓 Unlock sent (couldn’t confirm). If toys don’t respond, use your Reset link.')}
+};
+showLock();
 
 /* session settings */
 const MOODS=['Sweet','Warm and playful','Teasing','Strict','Mean'];
@@ -643,7 +663,7 @@ $('resetPersona').onclick=()=>{persona=DEFAULT_PERSONA;$('persona').value=person
 $('newChat').onclick=()=>{$('sheet').hidden=true;openSess(true)};
 $('void').onclick=async()=>{if(check)clearCheck();note('VOIDLOCK sent…');
   const r=await toyCall({action:'VOIDLOCK'});const ok=toyOk(r)||(r&&r.lock_write_confirmed);
-  logToy('VOIDLOCK used: everything stopped and locked');
+  logToy('VOIDLOCK used: everything stopped and locked');locked=true;store.set('locked',true);showLock();
   note(ok?'🔒 VOIDLOCK: toys stopped and locked. Use your Reset button to unlock.':'⚠️ VOIDLOCK sent, but not confirmed ('+toyWhy(r)+'). Use the off buttons or Lovense Remote too.');
   toast(ok?'VOIDLOCK done':'VOIDLOCK not confirmed — use the off buttons')};
 $('nextBtn').onclick=()=>{if(!urls.length){toast('Add photos in ☰ first');return}if(!settings.photosOn){toast('Photos are off. Tap the round icon to turn them on.');return}next()};
