@@ -49,7 +49,9 @@ header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-top:c
 .me{align-self:flex-end;background:rgba(160,50,85,var(--ba));border:1px solid rgba(255,190,210,.35);color:var(--ink-me);border-bottom-right-radius:6px}
 .chat.solo{justify-content:flex-end}
 .chat.solo .msg:not(.latest),.chat.solo .note{display:none}
-.chat.solo .msg.latest~.note{display:block}
+.chat.solo .note.fresh{display:block}
+.msg,.note{transition:opacity .8s ease}
+.chat.hush .msg,.chat.hush .note{opacity:0;pointer-events:none}
 .note{align-self:center;font-size:12px;color:var(--ink-soft);background:rgba(20,8,14,.6);padding:4px 10px;border-radius:999px;text-align:center}
 .typing{opacity:.7;font-style:italic}
 .composer{display:flex;gap:8px;align-items:flex-end;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:rgba(20,8,14,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line)}
@@ -174,6 +176,9 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <span>Message boxes: clear ← → solid</span>
       <input type="range" id="bubbleA" min="0" max="90" step="5">
       <label class="row" style="margin-top:8px"><input type="checkbox" id="solo" style="accent-color:var(--rose)"> Only show the latest message</label>
+      <label class="row" style="margin-top:8px">Hide messages after
+        <select id="hideSec"><option value="0">Never</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="120">2 minutes</option></select></label>
+      <p class="empty">Tap the screen to bring a hidden message back.</p>
       <p class="empty">Older messages are hidden, not deleted. She still remembers them.</p>
     </section>
 
@@ -370,8 +375,11 @@ let apiKey=store.get('key','');
 const chat=$('chat');
 let busy=false;
 function markLatest(){const ms=chat.querySelectorAll('.msg');ms.forEach(m=>m.classList.remove('latest'));if(ms.length)ms[ms.length-1].classList.add('latest')}
-function bubble(text,cls){const d=document.createElement('div');d.className='msg '+cls;d.textContent=text;chat.appendChild(d);markLatest();chat.scrollTop=chat.scrollHeight;return d}
-function note(text){const d=document.createElement('div');d.className='note';d.textContent=text;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
+function bubble(text,cls){const d=document.createElement('div');d.className='msg '+cls;d.textContent=text;chat.appendChild(d);markLatest();if(typeof wake==='function')wake();chat.scrollTop=chat.scrollHeight;return d}
+function note(text){chat.querySelectorAll('.note.fresh').forEach(n=>n.classList.remove('fresh'));const d=document.createElement('div');d.className='note fresh';d.textContent=text;chat.appendChild(d);chat.scrollTop=chat.scrollHeight;setTimeout(()=>d.classList.remove('fresh'),7000);wake()}
+let hushT=null;
+function wake(){chat.classList.remove('hush');clearTimeout(hushT);const sec=+(store.get('hideSec',0));if(sec)hushT=setTimeout(()=>{if(!busy&&document.activeElement!==$('input'))chat.classList.add('hush')},sec*1000)}
+chat.addEventListener('click',wake);$('input').addEventListener('focus',wake);
 const TAG=/\[PHOTO(?:\s+(now|\d{1,3}))?(?:\s*(?:min|mins|minutes)?)?(?:\s+(front|back))?\s*\]/i;
 function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|NOTE:[^\]]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
 history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'));
@@ -664,7 +672,7 @@ $('newChat').onclick=()=>{$('sheet').hidden=true;openSess(true)};
 $('void').onclick=async()=>{if(check)clearCheck();note('VOIDLOCK sent…');
   const r=await toyCall({action:'VOIDLOCK'});const ok=toyOk(r)||(r&&r.lock_write_confirmed);
   logToy('VOIDLOCK used: everything stopped and locked');locked=true;store.set('locked',true);showLock();
-  note(ok?'🔒 VOIDLOCK: toys stopped and locked. Use your Reset button to unlock.':'⚠️ VOIDLOCK sent, but not confirmed ('+toyWhy(r)+'). Use the off buttons or Lovense Remote too.');
+  note(ok?'🔒 VOIDLOCK: toys stopped and locked. Tap Unlock when you\u2019re ready.':'⚠️ VOIDLOCK sent, but not confirmed ('+toyWhy(r)+'). Use the off buttons or Lovense Remote too.');
   toast(ok?'VOIDLOCK done':'VOIDLOCK not confirmed — use the off buttons')};
 $('nextBtn').onclick=()=>{if(!urls.length){toast('Add photos in ☰ first');return}if(!settings.photosOn){toast('Photos are off. Tap the round icon to turn them on.');return}next()};
 function setPhotos(on){settings.photosOn=on;store.set('photosOn',on);$('photosOn').checked=on;pos=Math.max(-1,pos-1);next()}
@@ -696,6 +704,7 @@ $('clearAll').onclick=async()=>{
 };
 [['m-reply','onReply'],['m-open','onOpen'],['m-timer','onTimer']].forEach(([id,k])=>{$(id).checked=settings[k];$(id).onchange=e=>{settings[k]=e.target.checked;store.set(k,settings[k]);applyTimer()}});
 $('bubbleA').value=settings.bubbleA;$('bubbleA').oninput=e=>{settings.bubbleA=+e.target.value;store.set('bubbleA',settings.bubbleA);applyLook()};
+$('hideSec').value=String(store.get('hideSec',0));$('hideSec').onchange=e=>{store.set('hideSec',+e.target.value);wake()};
 $('solo').checked=settings.solo;$('solo').onchange=e=>{settings.solo=e.target.checked;store.set('solo',settings.solo);applyLook()};
 $('minutes').value=String(settings.minutes);
 $('minutes').onchange=e=>{settings.minutes=+e.target.value;store.set('minutes',settings.minutes);applyTimer()};
