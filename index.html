@@ -69,6 +69,11 @@ header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-left:
 .btn{background:rgba(255,255,255,.07);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:10px 14px;font:inherit;cursor:pointer}
 .btn.primary{background:var(--rose);color:#2a0a16;border-color:var(--rose);font-weight:600}
 .btn.warn{color:var(--danger)}
+.toy{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:12px}
+.toy b{flex:1;min-width:90px;font-weight:600}
+.toy label{display:flex;gap:5px;align-items:center;font-size:13px;border:none;padding:0}
+.toy .x{background:none;border:none;color:var(--ink-soft);font-size:15px;cursor:pointer}
+.tag{font-size:11px;color:var(--ink-soft);border:1px solid var(--line);border-radius:999px;padding:1px 7px}
 .thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .thumb{position:relative;aspect-ratio:3/4;max-width:100%;border-radius:8px;background-size:cover;background-position:center;border:1px solid var(--line)}
 .thumb button{position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;border:none;background:rgba(0,0,0,.65);color:#fff;font-size:13px;cursor:pointer}
@@ -137,6 +142,17 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <label class="row"><input type="checkbox" id="alertOn" style="accent-color:var(--rose)"> Phone notification when a check is due</label>
       <label class="row" style="margin-top:8px"><input type="checkbox" id="buzzOn" style="accent-color:var(--rose)"> Also a short buzz from the toy</label>
       <p class="empty" style="margin-top:6px">Works even if After Dark is closed, for checks up to 35 minutes away. Cancelled when you send the photo or use VOIDLOCK.</p>
+    </section>
+
+    <section>
+      <h3>My toys</h3>
+      <div id="toyList" class="choice"></div>
+      <div class="row" style="margin-top:8px">
+        <input id="toyName" class="btn" placeholder="Add a toy…" maxlength="40" style="flex:1;min-width:0">
+        <label class="row" style="font-size:13px"><input type="checkbox" id="toyOnline" style="accent-color:var(--rose)"> App-connected</label>
+        <button class="btn" id="toyAdd">Add</button>
+      </div>
+      <p class="empty" style="margin-top:6px">Tick <b>Wearing</b> for what's on you now, and <b>Connected</b> when an app toy is paired. Pairing still happens in its own app (Lovense Remote, TTLock). Ada uses this list to plan.</p>
     </section>
 
     <section>
@@ -236,6 +252,15 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <input type="range" id="sAro" min="0" max="10" step="1">
       <span id="sAroL"></span>
     </section>
+    <section>
+      <h3>Steer the session</h3>
+      <select id="sStyle" style="width:100%"></select>
+    </section>
+    <section>
+      <h3>Toys to involve</h3>
+      <div id="sToys" class="choice"></div>
+      <p class="empty" style="margin-top:6px">None ticked: Ada chooses from what you've got.</p>
+    </section>
     <div class="row">
       <button class="btn primary" id="sessStart">Start fresh session</button>
       <button class="btn" id="sessUpdate">Update current session</button>
@@ -320,6 +345,33 @@ const PRIV_TXT=['He is NOT private: other people are nearby. Keep everything dis
 const LENS=[0,10,15,20,30,45,60,90];
 function lenLabel(v){return LENS[v]?LENS[v]+' minutes':'Open-ended'}
 let sess=store.get('sess',{mood:3,priv:4,len:0,aro:3,start:0,end:0});
+const STYLES=[['ai','Ada decides everything','Ada is fully in charge of where the session goes, what happens next, which toys are used and when.'],
+ ['tease','Slow tease and build','Keep it slow: teasing, building anticipation, making him wait.'],
+ ['tasks','Tasks and photo checks','Focus on giving him tasks and checking them with photo checks.'],
+ ['toys','Toy-focused','Focus the session on the selected toys.'],
+ ['rules','Rules and obedience','Set rules, give instructions, and hold him to them.'],
+ ['chat','Just chat and flirt','Keep it conversational and flirty, no tasks unless he asks.']];
+let toys=store.get('toys',[{n:'Gemini',online:true,wear:false,conn:false},{n:'Hush 2',online:true,wear:false,conn:false},{n:'Tenera 2',online:true,wear:false,conn:false},{n:'Key safe',online:true,wear:false,conn:false}]);
+function saveToys(){store.set('toys',toys);renderToys()}
+function renderToys(){
+  const L=$('toyList');L.innerHTML='';
+  if(!toys.length)L.innerHTML='<p class="empty">No toys listed yet.</p>';
+  toys.forEach((t,i)=>{const d=document.createElement('div');d.className='toy';
+    d.innerHTML='<b></b>'+(t.online?'<span class="tag">app</span>':'')+'<label><input type="checkbox" class="w"> Wearing</label>'+(t.online?'<label><input type="checkbox" class="c"> Connected</label>':'')+'<button class="x" aria-label="Remove">✕</button>';
+    d.querySelector('b').textContent=t.n;
+    const w=d.querySelector('.w');w.checked=!!t.wear;w.onchange=()=>{t.wear=w.checked;saveToys()};
+    const c=d.querySelector('.c');if(c){c.checked=!!t.conn;c.onchange=()=>{t.conn=c.checked;saveToys()}}
+    d.querySelector('.x').onclick=()=>{if(confirmRemove(d)){toys.splice(i,1);saveToys()}};
+    L.appendChild(d)});
+}
+function confirmRemove(d){if(d.dataset.arm){return true}d.dataset.arm=1;d.querySelector('.x').textContent='Remove?';setTimeout(()=>{if(d.isConnected){delete d.dataset.arm;d.querySelector('.x').textContent='✕'}},3000);return false}
+$('toyAdd').onclick=()=>{const n=$('toyName').value.trim();if(!n)return;toys.push({n,online:$('toyOnline').checked,wear:false,conn:false});$('toyName').value='';$('toyOnline').checked=false;saveToys()};
+renderToys();
+function renderSessToys(){const L=$('sToys');L.innerHTML='';const pick=sess.toys||[];
+  if(!toys.length){L.innerHTML='<p class="empty">Add toys in ☰ Settings first.</p>';return}
+  toys.forEach(t=>{const l=document.createElement('label');l.innerHTML='<input type="checkbox"> <span></span>';l.querySelector('span').textContent=t.n+(t.wear?' (wearing)':'')+(t.online&&t.conn?' (connected)':'');
+    const c=l.querySelector('input');c.checked=pick.includes(t.n);c.dataset.n=t.n;L.appendChild(l)})}
+function readSessExtras(){sess.style=$('sStyle').value;sess.toys=[...$('sToys').querySelectorAll('input:checked')].map(c=>c.dataset.n)}
 function sessLabels(){
   $('sMoodL').textContent=sess.mood+' of 5: '+MOODS[sess.mood-1];
   $('sPrivL').textContent=sess.priv+' of 5: '+PRIVS[sess.priv-1];
@@ -327,7 +379,9 @@ function sessLabels(){
   $('sAroL').textContent=sess.aro+' of 10';
 }
 function sessPrompt(){
-  let t='\n\nCurrent session settings (chosen by Tim, follow them):\n- Your mood: '+MOOD_TXT[sess.mood-1]+'\n- Privacy: '+PRIV_TXT[sess.priv-1]+'\n- His arousal when he set this: '+sess.aro+' out of 10. Match your pace to it, and you can ask how it has changed.';
+  const st=STYLES.find(x=>x[0]===(sess.style||'ai'))||STYLES[0];
+  const have=toys.map(t=>t.n+(t.wear?' [wearing now]':'')+(t.online?(t.conn?' [app toy, connected]':' [app toy, not connected]'):'')).join(', ')||'none listed';
+  let t='\n\nCurrent session settings (chosen by Tim, follow them):\n- Your mood: '+MOOD_TXT[sess.mood-1]+'\n- Privacy: '+PRIV_TXT[sess.priv-1]+'\n- His arousal when he set this: '+sess.aro+' out of 10. Match your pace to it, and you can ask how it has changed.'+'\n- Direction: '+st[2]+'\n- Toys he has: '+have+'.'+((sess.toys&&sess.toys.length)?'\n- Toys he chose for this session: '+sess.toys.join(', ')+'.':'\n- He left the choice of toys to you.')+'\n- You cannot switch app toys on or off from this chat yet, so tell him what to do with them instead. Only suggest toys he has.';
   if(sess.end){const left=Math.round((sess.end-Date.now())/60000);
     t+=left>0?'\n- Session length: '+LENS[sess.len]+' minutes, about '+left+' minutes left. Pace things to fit, and start wrapping up in the last few minutes.':'\n- The planned session time is over. Wrap up warmly now unless he asks for more.';}
   else t+='\n- Session length: open-ended.';
@@ -336,9 +390,11 @@ function sessPrompt(){
 function openSess(fresh){
   $('sessTitle').textContent=fresh?'New session':'This session';
   $('sMood').value=sess.mood;$('sPriv').value=sess.priv;$('sLen').value=sess.len;$('sAro').value=sess.aro;sessLabels();
+  $('sStyle').innerHTML=STYLES.map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join('');$('sStyle').value=sess.style||'ai';renderSessToys();
   $('sessUpdate').hidden=!!fresh;$('sess').hidden=false;
 }
 function applySess(){
+  readSessExtras();
   sess.mood=+$('sMood').value;sess.priv=+$('sPriv').value;sess.aro=+$('sAro').value;
   const newLen=+$('sLen').value;
   if(newLen!==sess.len||!sess.start){sess.len=newLen;sess.start=Date.now();sess.end=LENS[newLen]?Date.now()+LENS[newLen]*60000:0}
@@ -348,9 +404,9 @@ function applySess(){
 $('sessBtn').onclick=()=>openSess(false);
 $('sessClose').onclick=()=>{sess=store.get('sess',sess);$('sess').hidden=true};
 $('sess').addEventListener('click',e=>{if(e.target.id==='sess'){sess=store.get('sess',sess);$('sess').hidden=true}});
-$('sessUpdate').onclick=()=>{sess.start=sess.start||Date.now();applySess();$('sess').hidden=true;note('Session updated: '+MOODS[sess.mood-1]+', '+lenLabel(sess.len));toast('She knows the new settings')};
+$('sessUpdate').onclick=()=>{sess.start=sess.start||Date.now();applySess();$('sess').hidden=true;note('Session updated: '+MOODS[sess.mood-1]+' · '+(STYLES.find(x=>x[0]===sess.style)||STYLES[0])[1]+' · '+lenLabel(sess.len));toast('She knows the new settings')};
 $('sessStart').onclick=()=>{sess.start=0;applySess();history=[];saveHistory();chat.innerHTML='';checkCard=null;clearCheck();
-  note('New session: '+MOODS[sess.mood-1]+' · '+PRIVS[sess.priv-1]+' · '+lenLabel(sess.len));$('sess').hidden=true;$('sheet').hidden=true};
+  note('New session: '+MOODS[sess.mood-1]+' · '+(STYLES.find(x=>x[0]===sess.style)||STYLES[0])[1]+' · '+lenLabel(sess.len));$('sess').hidden=true;$('sheet').hidden=true};
 let sessTick=null;
 function sessStatus(){clearInterval(sessTick);const upd=()=>{if(check)return;const base=(settings.name||'Ada')+' · online';
   if(sess.end){const left=Math.ceil((sess.end-Date.now())/60000);$('status').textContent=left>0?base+' · '+left+' min left':base+' · time’s up'}else if(apiKey)$('status').textContent=base};
@@ -485,7 +541,7 @@ async function dataToBlob(d){const r=await fetch(d);return r.blob()}
 $('backupBtn').onclick=async()=>{
   toast('Making backup…');
   const pics=[];for(const p of photos){const d=await blobToData(p.blob);if(d)pics.push(d)}
-  const data={app:'afterdark',version:1,saved:new Date().toISOString(),settings,persona,history,photos:pics};
+  const data={app:'afterdark',version:1,saved:new Date().toISOString(),settings,persona,history,toys,sess,photos:pics};
   const day=new Date().toISOString().slice(0,10);
   const file=new File([JSON.stringify(data)],'after-dark-backup-'+day+'.json',{type:'application/json'});
   try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'After Dark backup'});toast('Backup ready');return}}catch(e){if(e&&e.name==='AbortError'){toast('Backup cancelled');return}}
@@ -499,6 +555,7 @@ $('restoreFile').addEventListener('change',async e=>{
   toast('Restoring…');
   if(Array.isArray(data.photos)&&db){for(const p of photos)await delPhoto(p.id);for(const d of data.photos){try{await addPhoto(await dataToBlob(d))}catch(err){}}}
   if(data.settings){settings=Object.assign(settings,data.settings);['onReply','onOpen','onTimer','minutes','shuffle','dim','blur','name','photosOn','bubbleA','solo'].forEach(k=>store.set(k,settings[k]))}
+  if(Array.isArray(data.toys)){toys=data.toys;saveToys()}if(data.sess){sess=data.sess;store.set('sess',sess)}
   if(typeof data.persona==='string'){persona=data.persona;store.set('persona',persona);$('persona').value=persona}
   if(Array.isArray(data.history)){history=data.history;saveHistory();chat.innerHTML='';history.forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'))}
   [['m-reply','onReply'],['m-open','onOpen'],['m-timer','onTimer']].forEach(([id,k])=>$(id).checked=!!settings[k]);$('bubbleA').value=settings.bubbleA;$('solo').checked=settings.solo;
