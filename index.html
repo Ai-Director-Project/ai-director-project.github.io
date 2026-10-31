@@ -16,7 +16,7 @@
 /* Layout: one-screen phone app; photo layer behind, header / scrolling chat / composer on top */
 :root{
   --bg:#140b10; --ink:#f6e9ee; --ink-soft:#c9adb8; --rose:#e0708f; --rose-deep:#7a2840;
-  --bubble-them:rgba(40,16,26,.78); --bubble-me:rgba(242,196,212,.92); --ink-me:#3a0f1f;
+  --ba:.25; --ink-me:#fff;
   --line:rgba(255,220,232,.14); --sheet:#1f1118; --danger:#ff6b6b;
   --display:"Instrument Serif",Georgia,serif; --body:"Figtree",system-ui,sans-serif;
   color-scheme:dark;
@@ -44,8 +44,12 @@ header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-left:
 .iconbtn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
 .chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .msg{max-width:80%;padding:10px 14px;border-radius:18px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;min-width:0}
-.them{align-self:flex-start;background:var(--bubble-them);border:1px solid var(--line);border-bottom-left-radius:6px}
-.me{align-self:flex-end;background:var(--bubble-me);color:var(--ink-me);border-bottom-right-radius:6px}
+.msg{text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 8px rgba(0,0,0,.6)}
+.them{align-self:flex-start;background:rgba(20,8,14,var(--ba));border:1px solid var(--line);border-bottom-left-radius:6px}
+.me{align-self:flex-end;background:rgba(160,50,85,var(--ba));border:1px solid rgba(255,190,210,.35);color:var(--ink-me);border-bottom-right-radius:6px}
+.chat.solo{justify-content:flex-end}
+.chat.solo .msg:not(.latest),.chat.solo .note{display:none}
+.chat.solo .msg.latest~.note{display:block}
 .note{align-self:center;font-size:12px;color:var(--ink-soft);background:rgba(20,8,14,.6);padding:4px 10px;border-radius:999px;text-align:center}
 .typing{opacity:.7;font-style:italic}
 .composer{display:flex;gap:8px;align-items:flex-end;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:rgba(20,8,14,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line)}
@@ -135,11 +139,11 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     </section>
 
     <section>
-      <h3>Change background</h3>
+      <h3>Change background (tick any)</h3>
       <div class="choice">
-        <label><input type="radio" name="mode" value="reply" id="m-reply"> With each reply</label>
-        <label><input type="radio" name="mode" value="open" id="m-open"> Each time I reopen it</label>
-        <label><input type="radio" name="mode" value="timer" id="m-timer"> Every
+        <label><input type="checkbox" id="m-reply"> With each reply</label>
+        <label><input type="checkbox" id="m-open"> Each time I reopen it</label>
+        <label><input type="checkbox" id="m-timer"> Every
           <select id="minutes" aria-label="Minutes">
             <option value="1">1 minute</option><option value="2">2 minutes</option>
             <option value="5">5 minutes</option><option value="10">10 minutes</option>
@@ -155,6 +159,10 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <input type="range" id="dim" min="0" max="80" step="5">
       <span>Blur photo</span>
       <input type="range" id="blur" min="0" max="12" step="1">
+      <span>Message boxes: clear ← → solid</span>
+      <input type="range" id="bubbleA" min="0" max="90" step="5">
+      <label class="row" style="margin-top:8px"><input type="checkbox" id="solo" style="accent-color:var(--rose)"> Only show the latest message</label>
+      <p class="empty">Older messages are hidden, not deleted. Grok still remembers them.</p>
     </section>
 
     <section>
@@ -206,7 +214,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 <script>
 const $=id=>document.getElementById(id);
 const store={get(k,d){try{const v=localStorage.getItem('ad_'+k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('ad_'+k,JSON.stringify(v))}catch(e){}}};
-let settings={mode:store.get('mode','reply'),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:store.get('name','Grok'),photosOn:store.get('photosOn',true),alertOn:store.get('alertOn',true),buzzOn:store.get('buzzOn',false)};
+let settings={onReply:store.get('onReply',store.get('mode','reply')==='reply'),onOpen:store.get('onOpen',store.get('mode','reply')==='open'),onTimer:store.get('onTimer',store.get('mode','reply')==='timer'),bubbleA:store.get('bubbleA',20),solo:store.get('solo',true),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:store.get('name','Grok'),photosOn:store.get('photosOn',true),alertOn:store.get('alertOn',true),buzzOn:store.get('buzzOn',false)};
 let photos=[]; let urls=[]; let order=[]; let pos=-1; let layer=0; let timer=null;
 
 function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,3200)}
@@ -241,8 +249,8 @@ function renderThumbs(){
   photos.forEach((p,i)=>{const d=document.createElement('div');d.className='thumb';d.style.backgroundImage=`url("${urls[i]}")`;const b=document.createElement('button');b.textContent='✕';b.setAttribute('aria-label','Remove photo');b.onclick=async()=>{await delPhoto(p.id);await refresh();next()};d.appendChild(b);t.appendChild(d)});
 }
 
-function applyLook(){document.documentElement.style.setProperty('--dim',settings.dim/100);document.documentElement.style.setProperty('--blur',settings.blur+'px');$('name').textContent=settings.name||'Grok'}
-function applyTimer(){clearInterval(timer);if(settings.mode==='timer')timer=setInterval(next,settings.minutes*60000)}
+function applyLook(){document.documentElement.style.setProperty('--ba',(settings.bubbleA||0)/100);$('chat').classList.toggle('solo',!!settings.solo);document.documentElement.style.setProperty('--dim',settings.dim/100);document.documentElement.style.setProperty('--blur',settings.blur+'px');$('name').textContent=settings.name||'Grok'}
+function applyTimer(){clearInterval(timer);if(settings.onTimer)timer=setInterval(next,settings.minutes*60000)}
 
 /* chat via Make -> Grok */
 const DEFAULT_PERSONA="You are Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. You can't control his lock or toys yet, so don't pretend to.";
@@ -252,7 +260,8 @@ const MODEL='grok-4.20-0309-non-reasoning', KEEP=20;
 let apiKey=store.get('key','');
 const chat=$('chat');
 let busy=false;
-function bubble(text,cls){const d=document.createElement('div');d.className='msg '+cls;d.textContent=text;chat.appendChild(d);chat.scrollTop=chat.scrollHeight;return d}
+function markLatest(){const ms=chat.querySelectorAll('.msg');ms.forEach(m=>m.classList.remove('latest'));if(ms.length)ms[ms.length-1].classList.add('latest')}
+function bubble(text,cls){const d=document.createElement('div');d.className='msg '+cls;d.textContent=text;chat.appendChild(d);markLatest();chat.scrollTop=chat.scrollHeight;return d}
 function note(text){const d=document.createElement('div');d.className='note';d.textContent=text;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
 const TAG=/\[PHOTO(?:\s+(now|\d{1,3}))?(?:\s*(?:min|mins|minutes)?)?(?:\s+(front|back))?\s*\]/i;
 function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').trim()}
@@ -276,14 +285,14 @@ function handleReply(t,reply){
   t.classList.remove('typing'); t.textContent=clean(reply)||'…'; history.push({who:'them',text:reply}); saveHistory();
   const m=reply.match(TAG);
   if(m){const mins=(!m[1]||m[1].toLowerCase()==='now')?0:Math.min(120,parseInt(m[1],10));setCheck(Date.now()+mins*60000,(m[2]||'front').toLowerCase())}
-  if(settings.mode==='reply')next();
+  if(settings.onReply)next();
 }
 async function send(){
   const v=$('input').value.trim(); if(!v||busy)return;
   if(!apiKey){toast('Add your Grok key in ☰ first');$('sheet').hidden=false;return}
   busy=true; history.push({who:'me',text:v}); saveHistory(); bubble(v,'me'); $('input').value=''; autosize();
   const t=bubble('typing…','them typing');
-  try{handleReply(t,await askGrok())}catch(e){t.remove(); note(e&&e.msg?e.msg:'Couldn’t reach Grok. Check your internet and try again.')}
+  try{handleReply(t,await askGrok())}catch(e){t.remove(); markLatest(); note(e&&e.msg?e.msg:'Couldn’t reach Grok. Check your internet and try again.')}
   busy=false; chat.scrollTop=chat.scrollHeight;
 }
 
@@ -325,7 +334,7 @@ async function sendPhoto(file,cam){
     history.push({who:'me',text:'📷 Photo sent ('+(wasCheck?'photo check, ':'')+(cam==='back'?'back':'front')+' camera). You reviewed it below.'});
     if(wasCheck)clearCheck();
     handleReply(t,reply);
-  }catch(e){t.remove(); note(e&&e.msg?e.msg:'Couldn’t send the photo. Check your internet and try again.')}
+  }catch(e){t.remove(); markLatest(); note(e&&e.msg?e.msg:'Couldn’t send the photo. Check your internet and try again.')}
   busy=false; chat.scrollTop=chat.scrollHeight;
 }
 $('camFront').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';sendPhoto(f,'front')});
@@ -373,7 +382,9 @@ $('clearAll').onclick=async()=>{
   clearArmed=false;$('clearAll').textContent='Remove all';
   for(const p of photos)await delPhoto(p.id); await refresh(); next();
 };
-document.querySelectorAll('input[name=mode]').forEach(r=>{r.checked=r.value===settings.mode;r.onchange=()=>{settings.mode=r.value;store.set('mode',r.value);applyTimer()}});
+[['m-reply','onReply'],['m-open','onOpen'],['m-timer','onTimer']].forEach(([id,k])=>{$(id).checked=settings[k];$(id).onchange=e=>{settings[k]=e.target.checked;store.set(k,settings[k]);applyTimer()}});
+$('bubbleA').value=settings.bubbleA;$('bubbleA').oninput=e=>{settings.bubbleA=+e.target.value;store.set('bubbleA',settings.bubbleA);applyLook()};
+$('solo').checked=settings.solo;$('solo').onchange=e=>{settings.solo=e.target.checked;store.set('solo',settings.solo);applyLook()};
 $('minutes').value=String(settings.minutes);
 $('minutes').onchange=e=>{settings.minutes=+e.target.value;store.set('minutes',settings.minutes);applyTimer()};
 $('shuffle').checked=settings.shuffle;
@@ -401,16 +412,16 @@ $('restoreFile').addEventListener('change',async e=>{
   if(!data||data.app!=='afterdark'){toast('That file isn’t an After Dark backup.');return}
   toast('Restoring…');
   if(Array.isArray(data.photos)&&db){for(const p of photos)await delPhoto(p.id);for(const d of data.photos){try{await addPhoto(await dataToBlob(d))}catch(err){}}}
-  if(data.settings){settings=Object.assign(settings,data.settings);['mode','minutes','shuffle','dim','blur','name','photosOn'].forEach(k=>store.set(k,settings[k]))}
+  if(data.settings){settings=Object.assign(settings,data.settings);['onReply','onOpen','onTimer','minutes','shuffle','dim','blur','name','photosOn','bubbleA','solo'].forEach(k=>store.set(k,settings[k]))}
   if(typeof data.persona==='string'){persona=data.persona;store.set('persona',persona);$('persona').value=persona}
   if(Array.isArray(data.history)){history=data.history;saveHistory();chat.innerHTML='';history.forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'))}
-  document.querySelectorAll('input[name=mode]').forEach(r=>r.checked=r.value===settings.mode);
+  [['m-reply','onReply'],['m-open','onOpen'],['m-timer','onTimer']].forEach(([id,k])=>$(id).checked=!!settings[k]);$('bubbleA').value=settings.bubbleA;$('solo').checked=settings.solo;
   $('minutes').value=String(settings.minutes);$('shuffle').checked=settings.shuffle;$('dim').value=settings.dim;$('blur').value=settings.blur;$('nameInput').value=settings.name;$('photosOn').checked=settings.photosOn;
   applyLook();applyTimer();await refresh();next();
   toast('Restored '+photos.length+' photos and your chat');
 });
 
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&settings.mode==='open')next()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&settings.onOpen)next()});
 
 (async()=>{applyLook();await openDB();await refresh();next();applyTimer()})();
 $('status').textContent=apiKey?'Grok · online':'Add your key in ☰';
