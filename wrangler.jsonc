@@ -1,0 +1,10 @@
+{
+  // Cloudflare helper for After Dark (the web page itself is served by GitHub Pages).
+  "name": "home-helper",
+  "main": "helper/worker.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "kv_namespaces": [
+    { "binding": "STORE", "id": "4944964e59e145cc8d66d435577f6b9f" }
+  ]
+}
