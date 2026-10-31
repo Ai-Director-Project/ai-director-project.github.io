@@ -99,6 +99,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <h1 id="name">Ada</h1>
       <p id="status">Connecting…</p>
     </div>
+    <button class="iconbtn" id="sessBtn" aria-label="Session settings">♡</button>
     <button class="iconbtn" id="nextBtn" aria-label="Next background">↻</button>
     <button class="iconbtn" id="openSettings" aria-label="Settings">☰</button>
   </header>
@@ -209,6 +210,40 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
   </div>
 </div>
 
+<div class="sheet-wrap" id="sess" hidden>
+  <div class="sheet" role="dialog" aria-label="Session">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="sessTitle">New session</h2>
+      <button class="btn" id="sessClose">Close</button>
+    </div>
+    <section class="slider">
+      <h3>Her mood</h3>
+      <input type="range" id="sMood" min="1" max="5" step="1">
+      <span id="sMoodL"></span>
+    </section>
+    <section class="slider">
+      <h3>Your privacy</h3>
+      <input type="range" id="sPriv" min="1" max="5" step="1">
+      <span id="sPrivL"></span>
+    </section>
+    <section class="slider">
+      <h3>Session length</h3>
+      <input type="range" id="sLen" min="0" max="7" step="1">
+      <span id="sLenL"></span>
+    </section>
+    <section class="slider">
+      <h3>Your arousal right now</h3>
+      <input type="range" id="sAro" min="0" max="10" step="1">
+      <span id="sAroL"></span>
+    </section>
+    <div class="row">
+      <button class="btn primary" id="sessStart">Start fresh session</button>
+      <button class="btn" id="sessUpdate">Update current session</button>
+    </div>
+    <p class="empty">Start fresh clears the chat. Update keeps the chat and just tells her the new settings.</p>
+  </div>
+</div>
+
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -269,8 +304,60 @@ function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').trim(
 history.forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'));
 function saveHistory(){history=history.slice(-60);store.set('history',history)}
 const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, 0 to 120, then front or back camera). Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
+/* session settings */
+const MOODS=['Sweet','Warm and playful','Teasing','Strict','Mean'];
+const MOOD_TXT=['Be very sweet, gentle, affectionate and encouraging. No harshness at all.',
+ 'Be warm and playful, with light flirty teasing.',
+ 'Be teasing and a little bossy, keeping him on his toes.',
+ 'Be strict and demanding. Expect obedience and call him out when he slacks.',
+ 'Be mean in a playful dominant way: cutting, demanding and hard to please. Never genuinely cruel about who he is, and never ignore a stop or VOIDLOCK.'];
+const PRIVS=['Not private: others are around','Semi-private','Fairly private','Private','Completely alone'];
+const PRIV_TXT=['He is NOT private: other people are nearby. Keep everything discreet and subtle. Only ask for photos that would look completely ordinary to anyone else.',
+ 'He is only semi-private: someone could walk in. Keep tasks and photos low-key and quick to hide.',
+ 'He is fairly private, but keep things reasonably discreet.',
+ 'He is private.',
+ 'He is completely alone and private. No need for discretion.'];
+const LENS=[0,10,15,20,30,45,60,90];
+function lenLabel(v){return LENS[v]?LENS[v]+' minutes':'Open-ended'}
+let sess=store.get('sess',{mood:3,priv:4,len:0,aro:3,start:0,end:0});
+function sessLabels(){
+  $('sMoodL').textContent=sess.mood+' of 5: '+MOODS[sess.mood-1];
+  $('sPrivL').textContent=sess.priv+' of 5: '+PRIVS[sess.priv-1];
+  $('sLenL').textContent=lenLabel(sess.len);
+  $('sAroL').textContent=sess.aro+' of 10';
+}
+function sessPrompt(){
+  let t='\n\nCurrent session settings (chosen by Tim, follow them):\n- Your mood: '+MOOD_TXT[sess.mood-1]+'\n- Privacy: '+PRIV_TXT[sess.priv-1]+'\n- His arousal when he set this: '+sess.aro+' out of 10. Match your pace to it, and you can ask how it has changed.';
+  if(sess.end){const left=Math.round((sess.end-Date.now())/60000);
+    t+=left>0?'\n- Session length: '+LENS[sess.len]+' minutes, about '+left+' minutes left. Pace things to fit, and start wrapping up in the last few minutes.':'\n- The planned session time is over. Wrap up warmly now unless he asks for more.';}
+  else t+='\n- Session length: open-ended.';
+  return t;
+}
+function openSess(fresh){
+  $('sessTitle').textContent=fresh?'New session':'This session';
+  $('sMood').value=sess.mood;$('sPriv').value=sess.priv;$('sLen').value=sess.len;$('sAro').value=sess.aro;sessLabels();
+  $('sessUpdate').hidden=!!fresh;$('sess').hidden=false;
+}
+function applySess(){
+  sess.mood=+$('sMood').value;sess.priv=+$('sPriv').value;sess.aro=+$('sAro').value;
+  const newLen=+$('sLen').value;
+  if(newLen!==sess.len||!sess.start){sess.len=newLen;sess.start=Date.now();sess.end=LENS[newLen]?Date.now()+LENS[newLen]*60000:0}
+  store.set('sess',sess);sessStatus();
+}
+['sMood','sPriv','sLen','sAro'].forEach(id=>$(id).oninput=()=>{sess.mood=+$('sMood').value;sess.priv=+$('sPriv').value;sess.aro=+$('sAro').value;const l=+$('sLen').value;$('sLenL').textContent=lenLabel(l);$('sMoodL').textContent=sess.mood+' of 5: '+MOODS[sess.mood-1];$('sPrivL').textContent=sess.priv+' of 5: '+PRIVS[sess.priv-1];$('sAroL').textContent=sess.aro+' of 10'});
+$('sessBtn').onclick=()=>openSess(false);
+$('sessClose').onclick=()=>{sess=store.get('sess',sess);$('sess').hidden=true};
+$('sess').addEventListener('click',e=>{if(e.target.id==='sess'){sess=store.get('sess',sess);$('sess').hidden=true}});
+$('sessUpdate').onclick=()=>{sess.start=sess.start||Date.now();applySess();$('sess').hidden=true;note('Session updated: '+MOODS[sess.mood-1]+', '+lenLabel(sess.len));toast('She knows the new settings')};
+$('sessStart').onclick=()=>{sess.start=0;applySess();history=[];saveHistory();chat.innerHTML='';checkCard=null;clearCheck();
+  note('New session: '+MOODS[sess.mood-1]+' · '+PRIVS[sess.priv-1]+' · '+lenLabel(sess.len));$('sess').hidden=true;$('sheet').hidden=true};
+let sessTick=null;
+function sessStatus(){clearInterval(sessTick);const upd=()=>{if(check)return;const base=(settings.name||'Ada')+' · online';
+  if(sess.end){const left=Math.ceil((sess.end-Date.now())/60000);$('status').textContent=left>0?base+' · '+left+' min left':base+' · time’s up'}else if(apiKey)$('status').textContent=base};
+  upd();if(sess.end)sessTick=setInterval(upd,30000)}
+
 async function askGrok(extra){
-  const msgs=[{role:'system',content:(persona||DEFAULT_PERSONA)+PHOTO_RULES}].concat(history.slice(-KEEP).map(m=>({role:m.who==='me'?'user':'assistant',content:m.text})));
+  const msgs=[{role:'system',content:(persona||DEFAULT_PERSONA)+PHOTO_RULES+sessPrompt()}].concat(history.slice(-KEEP).map(m=>({role:m.who==='me'?'user':'assistant',content:m.text})));
   if(extra)msgs.push(extra);
   const call=async model=>fetch('https://api.x.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},body:JSON.stringify({model,messages:msgs,max_tokens:600})});
   let r=await call(MODEL);
@@ -308,7 +395,7 @@ function setCheck(due,cam){
   const delay=Math.round((due-Date.now())/1000);
   if(settings.alertOn&&delay>=20&&delay<=2100)alertMake({action:'PHOTO_CHECK_START',request_id:id,delay_s:String(delay),buzz:settings.buzzOn?'yes':'no'});
 }
-function clearCheck(){if(check&&check.id&&check.due>Date.now()-60000)alertMake({action:'PHOTO_CHECK_CANCEL'});check=null;store.set('check',null);if(checkCard){checkCard.remove();checkCard=null}clearInterval(tick);tick=null;$('status').textContent=apiKey?(settings.name||'Ada')+' · online':'Add your key in ☰'}
+function clearCheck(){if(check&&check.id&&check.due>Date.now()-60000)alertMake({action:'PHOTO_CHECK_CANCEL'});check=null;store.set('check',null);if(checkCard){checkCard.remove();checkCard=null}clearInterval(tick);tick=null;$('status').textContent=apiKey?(settings.name||'Ada')+' · online':'Add your key in ☰';if(typeof sessStatus==='function')sessStatus()}
 function renderCheck(){
   clearInterval(tick); if(!check)return;
   if(!checkCard){checkCard=document.createElement('div');checkCard.className='checkcard';checkCard.innerHTML='<div class="ck-title"></div><div class="row ck-btns" hidden><button class="btn primary" data-cam="front">Front camera</button><button class="btn primary" data-cam="back">Back camera</button></div>';checkCard.querySelectorAll('button').forEach(b=>b.onclick=()=>openCam(b.dataset.cam));chat.appendChild(checkCard)}
@@ -352,9 +439,7 @@ $('apiKey').value=apiKey;$('apiKey').oninput=e=>{apiKey=e.target.value.trim();st
 $('persona').value=persona;
 $('persona').oninput=e=>{persona=e.target.value;store.set('persona',persona)};
 $('resetPersona').onclick=()=>{persona=DEFAULT_PERSONA;$('persona').value=persona;store.set('persona',persona);toast('Default personality restored')};
-let freshArmed=false;
-$('newChat').onclick=()=>{if(!freshArmed){freshArmed=true;$('newChat').textContent='Tap again to clear the chat';setTimeout(()=>{freshArmed=false;$('newChat').textContent='Start a fresh chat'},3000);return}
-  freshArmed=false;$('newChat').textContent='Start a fresh chat';history=[];saveHistory();chat.innerHTML='';checkCard=null;clearCheck();note('Fresh chat started');$('sheet').hidden=true};
+$('newChat').onclick=()=>{$('sheet').hidden=true;openSess(true)};
 $('void').onclick=()=>{if(check)clearCheck();toast('Photo check cancelled. VOIDLOCK for the lock and toys isn’t connected here yet. Use your normal VOIDLOCK.')};
 $('nextBtn').onclick=()=>{if(!urls.length){toast('Add photos in ☰ first');return}if(!settings.photosOn){toast('Photos are off. Tap the round icon to turn them on.');return}next()};
 function setPhotos(on){settings.photosOn=on;store.set('photosOn',on);$('photosOn').checked=on;pos=Math.max(-1,pos-1);next()}
@@ -427,6 +512,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 (async()=>{applyLook();await openDB();await refresh();next();applyTimer()})();
 $('status').textContent=apiKey?(settings.name||'Ada')+' · online':'Add your key in ☰';
 if(check)renderCheck();
+sessStatus();
 </script>
 </body>
 </html>
