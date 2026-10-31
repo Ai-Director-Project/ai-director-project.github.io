@@ -35,7 +35,7 @@ summary::-webkit-details-marker{display:none}
 .avatar{cursor:pointer}
 .shade{position:fixed;inset:0;z-index:2;background:rgba(12,4,8,var(--dim,.45));backdrop-filter:blur(var(--blur,0px));-webkit-backdrop-filter:blur(var(--blur,0px))}
 .app{position:relative;z-index:3;height:100%;display:flex;flex-direction:column}
-header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line);background:rgba(20,8,14,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-top:calc(12px + env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line);background:rgba(20,8,14,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .avatar{width:40px;height:40px;border-radius:50%;background:var(--rose-deep);display:grid;place-items:center;font-family:var(--display);font-size:22px;color:var(--ink)}
 .who{flex:1;min-width:0}
 .who h1{margin:0;font-family:var(--display);font-weight:400;font-size:24px;line-height:1}
