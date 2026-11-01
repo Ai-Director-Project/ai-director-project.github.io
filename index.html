@@ -72,6 +72,14 @@ header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-top:c
 .btn{background:rgba(255,255,255,.07);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:10px 14px;font:inherit;cursor:pointer}
 .btn.primary{background:var(--rose);color:#2a0a16;border-color:var(--rose);font-weight:600}
 .btn.warn{color:var(--danger)}
+.tab{background:none;border:1px solid var(--line);color:var(--ink-soft);border-radius:999px;padding:6px 14px;font:inherit;font-size:15px;cursor:pointer}
+.tab.on{background:var(--rose);color:#2a0a16;border-color:var(--rose);font-weight:600}
+.pcat{margin:16px 0 6px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);font-weight:600}
+.pchips{display:flex;flex-wrap:wrap;gap:6px}
+.pk{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:6px 11px;font-size:14px;background:rgba(255,255,255,.05);color:var(--ink);cursor:pointer;user-select:none}
+.pk.y{background:var(--rose);color:#2a0a16;border-color:var(--rose)}
+.pk.m{background:rgba(224,112,143,.25);border-color:var(--rose)}
+.pk.n{background:rgba(120,120,120,.25);color:#999;text-decoration:line-through}
 .toy{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:12px}
 .toy b{flex:1;min-width:90px;font-weight:600}
 .toy label{display:flex;gap:5px;align-items:center;font-size:13px;border:none;padding:0}
@@ -104,7 +112,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
   <header>
     <button class="avatar" id="avatar" aria-label="Photos on or off" style="border:none;padding:0">A</button>
     <div class="who">
-      <h1 id="name">Ada</h1>
+      <h1 id="name">Vesper</h1>
       <p id="status">Connecting…</p>
     </div>
     <button class="iconbtn" id="sessBtn" aria-label="Session settings">♡</button>
@@ -190,21 +198,21 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     </section>
 
     <section>
-      <h3>Her personality</h3>
+      <h3>Her character (generic, same for anyone)</h3>
       <textarea id="persona" rows="7" class="btn" style="width:100%;box-sizing:border-box;resize:vertical;font-size:15px;line-height:1.5"></textarea>
-      <div class="row" style="margin-top:8px"><button class="btn" id="resetPersona">Use the default</button><button class="btn warn" id="newChat">Start a fresh chat</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn" id="resetPersona">Reset to basic</button><button class="btn warn" id="newChat">Start a fresh chat</button></div>
     </section>
 
     <section>
-      <h3>Ada's memory about you</h3>
+      <h3>What she knows about you (personal)</h3>
       <textarea id="adaMem" rows="6" class="btn" placeholder="Empty. Load your profile file with Restore, or type here." style="width:100%;box-sizing:border-box;resize:vertical;font-size:14px;line-height:1.45"></textarea>
       <p class="empty" style="margin-top:6px">Kept on this device only (and in your backups). Never on GitHub.</p>
     </section>
 
     <section>
-      <h3>Ada's notes from past sessions</h3>
+      <h3>Her notes from past sessions</h3>
       <div id="notesList" class="choice"></div>
-      <p class="empty" style="margin-top:6px">Ada adds these herself after sessions. Tap ✕ twice to delete one.</p>
+      <p class="empty" style="margin-top:6px">She adds these herself after sessions. Tap ✕ twice to delete one.</p>
     </section>
 
     <section>
@@ -272,7 +280,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     <section>
       <h3>Toys to involve</h3>
       <div id="sToys" class="choice"></div>
-      <p class="empty" style="margin-top:6px">None ticked: Ada chooses from what you've got.</p>
+      <p class="empty" style="margin-top:6px">None ticked: she chooses from what you've got.</p>
     </section>
     <div class="row">
       <button class="btn primary" id="sessStart">Start fresh session</button>
@@ -284,14 +292,24 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 
 <div class="sheet-wrap" id="toysSheet" hidden>
   <div class="sheet" role="dialog" aria-label="Toys">
-    <div class="row" style="justify-content:space-between"><h2>Toys</h2><button class="btn" id="toysClose">Done</button></div>
+    <div class="row" style="justify-content:space-between"><div class="row"><button class="tab on" id="tabT">Toys</button><button class="tab" id="tabP">Play</button></div><button class="btn" id="toysClose">Done</button></div>
+    <div id="paneP" hidden>
+      <p class="empty" style="margin:0">Tap to cycle: <b>her call</b> → <span class="pk y">Into it</span> → <span class="pk m">Curious</span> → <span class="pk n">No</span>. Anything left as her call, she decides. <b>No</b> means never.</p>
+      <div class="row" style="margin-top:10px"><button class="btn" id="playReset">Let her decide everything</button></div>
+      <div id="playList"></div>
+      <div class="row" style="margin-top:12px">
+        <input id="playName" class="btn" placeholder="Add your own…" maxlength="40" style="flex:1;min-width:0">
+        <button class="btn" id="playAdd">Add</button>
+      </div>
+    </div>
+    <div id="paneT">
     <section>
       <h3>App toys</h3>
       <div class="row" style="margin-bottom:10px">
         <button class="btn primary" id="pairBtn">Pair Lovense (QR code)</button>
         <button class="btn" id="checkAll">Check connections</button>
       </div>
-      <label class="row" style="margin-bottom:10px"><input type="checkbox" id="adaCtl" style="accent-color:var(--rose)"> Let Ada control connected Lovense toys</label>
+      <label class="row" style="margin-bottom:10px"><input type="checkbox" id="adaCtl" style="accent-color:var(--rose)"> Let her control connected Lovense toys</label>
       <div id="toyApp" class="choice"></div>
     </section>
     <section>
@@ -303,8 +321,9 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
         <label class="row" style="font-size:13px"><input type="checkbox" id="toyOnline" style="accent-color:var(--rose)"> App-connected</label>
         <button class="btn" id="toyAdd">Add</button>
       </div>
-      <p class="empty" style="margin-top:6px">Tick <b>Wearing</b> for what's on you now, and <b>Connected</b> when an app toy is paired. Ada uses this list to plan.</p>
+      <p class="empty" style="margin-top:6px">Tick <b>Wearing</b> for what's on you now, and <b>Connected</b> when an app toy is paired. She uses this list to plan.</p>
     </section>
+    </div>
   </div>
 </div>
 
@@ -327,7 +346,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 <script>
 const $=id=>document.getElementById(id);
 const store={get(k,d){try{const v=localStorage.getItem('ad_'+k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('ad_'+k,JSON.stringify(v))}catch(e){}}};
-let settings={onReply:store.get('onReply',store.get('mode','reply')==='reply'),onOpen:store.get('onOpen',store.get('mode','reply')==='open'),onTimer:store.get('onTimer',store.get('mode','reply')==='timer'),bubbleA:store.get('bubbleA',20),solo:store.get('solo',true),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:(n=>(!n||n==='Grok')?'Ada':n)(store.get('name','Ada')),photosOn:store.get('photosOn',true),alertOn:store.get('alertOn',true),adaCtl:store.get('adaCtl',true),buzzOn:store.get('buzzOn',false),winSec:store.get('winSec',15)};
+let settings={onReply:store.get('onReply',store.get('mode','reply')==='reply'),onOpen:store.get('onOpen',store.get('mode','reply')==='open'),onTimer:store.get('onTimer',store.get('mode','reply')==='timer'),bubbleA:store.get('bubbleA',20),solo:store.get('solo',true),minutes:store.get('minutes',5),shuffle:store.get('shuffle',true),dim:store.get('dim',45),blur:store.get('blur',0),name:(n=>(!n||n==='Grok'||n==='Ada')?'Vesper':n)(store.get('name','Vesper')),photosOn:store.get('photosOn',true),alertOn:store.get('alertOn',true),adaCtl:store.get('adaCtl',true),buzzOn:store.get('buzzOn',false),winSec:store.get('winSec',15)};
 let photos=[]; let urls=[]; let order=[]; let pos=-1; let layer=0; let timer=null;
 
 function toast(t){const el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,3200)}
@@ -362,12 +381,12 @@ function renderThumbs(){
   photos.forEach((p,i)=>{const d=document.createElement('div');d.className='thumb';d.style.backgroundImage=`url("${urls[i]}")`;const b=document.createElement('button');b.textContent='✕';b.setAttribute('aria-label','Remove photo');b.onclick=async()=>{await delPhoto(p.id);await refresh();next()};d.appendChild(b);t.appendChild(d)});
 }
 
-function applyLook(){document.documentElement.style.setProperty('--ba',(settings.bubbleA||0)/100);$('chat').classList.toggle('solo',!!settings.solo);document.documentElement.style.setProperty('--dim',settings.dim/100);document.documentElement.style.setProperty('--blur',settings.blur+'px');$('name').textContent=settings.name||'Ada';$('avatar').textContent=(settings.name||'Ada').trim().charAt(0).toUpperCase()||'A'}
+function applyLook(){document.documentElement.style.setProperty('--ba',(settings.bubbleA||0)/100);$('chat').classList.toggle('solo',!!settings.solo);document.documentElement.style.setProperty('--dim',settings.dim/100);document.documentElement.style.setProperty('--blur',settings.blur+'px');$('name').textContent=settings.name||'Vesper';$('avatar').textContent=(settings.name||'Vesper').trim().charAt(0).toUpperCase()||'V'}
 function applyTimer(){clearInterval(timer);if(settings.onTimer)timer=setInterval(next,settings.minutes*60000)}
 
 /* chat via Make -> Grok */
-const DEFAULT_PERSONA="You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. Only claim to control a toy when the page tells you it is connected; never pretend.";
-const OLD_PERSONAS=["You are Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. You can't control his lock or toys yet, so don't pretend to.","You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. You can't control his lock or toys yet, so don't pretend to."];
+const DEFAULT_PERSONA="Your name is Vesper. You are Tim's flirty, teasing, confident companion in his private app. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. Only claim to control a toy when the page tells you it is connected; never pretend.";
+const OLD_PERSONAS=["You are Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. You can't control his lock or toys yet, so don't pretend to.","You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. You can't control his lock or toys yet, so don't pretend to.","You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. Only claim to control a toy when the page tells you it is connected; never pretend."];
 let persona=store.get('persona',DEFAULT_PERSONA);if(OLD_PERSONAS.includes(persona)){persona=DEFAULT_PERSONA;store.set('persona',persona)}
 let history=store.get('history',[]);
 const MODEL='grok-4.20-0309-non-reasoning', KEEP=20;
@@ -448,6 +467,36 @@ $('unlockBtn').onclick=async()=>{
 };
 showLock();
 
+/* play preferences: '' = her call, y = into it, m = curious, n = no (hard limit) */
+const PLAY=[
+ ['Control and rules',['Being told what to do','Rules and protocols','Tasks and challenges','Earning rewards','Non-physical punishments','Begging','Asking permission to cum','Tease and denial','Edging','Ruined orgasms','Multiple orgasms','Orgasm countdowns','Chastity','Key-holding','Timed lockbox','Long-term control']],
+ ['Words and attitude',['Praise','Pet names','Dirty talk','Verbal humiliation','Degradation','Size teasing','Mocking and laughing','Strict tone','Cold or ignoring','Body teasing']],
+ ['Sensation and pain',['Nipple clamps','Nipple play','Clothes pegs','Spanking (self)','Paddles and implements','Ice and cold','Hot wax','Scratching','Tickling','Genital pain (CBT)','Ball play','E-stim']],
+ ['Restraint',['Handcuffs','Rope','Self-bondage','Blindfold','Gag','Holding positions','Stillness tasks']],
+ ['Toys',['Vibrators','App-controlled toys','Strokers','Anal toys','Plugs','Prostate play','Pegging fantasy','Toys worn for long periods']],
+ ['Body and exercise',['Exercise tasks','Endurance holds','Workouts while aroused','Training goals over weeks','Body photo checks']],
+ ['Fluids and taboo',['Precum tasting','Cum eating (CEI)','Mess and clean-up tasks','Watersports']],
+ ['Exposure and public',['Discreet public tasks','Wearing toys out','Underwear and clothing rules','Being photographed for her','Video tasks']],
+ ['Roleplay and fantasy',['Goddess worship','Being her toy or object','Pet play','Servant or maid','Feminization','Sissy play','Cuckold fantasy','Strict teacher or boss','Interrogation fantasy']]
+];
+let play=store.get('play',{});let playExtra=store.get('playExtra',[]);
+const PLAY_NEXT={'':'y',y:'m',m:'n',n:''};
+function savePlay(){store.set('play',play);store.set('playExtra',playExtra)}
+function playChip(name){const c=document.createElement('span');c.className='pk '+(play[name]||'');c.textContent=name;
+  c.onclick=()=>{const v=PLAY_NEXT[play[name]||''];if(v)play[name]=v;else delete play[name];c.className='pk '+v;savePlay()};return c}
+function renderPlay(){const L=$('playList');L.innerHTML='';
+  PLAY.concat(playExtra.length?[['Your own',playExtra]]:[]).forEach(([cat,items])=>{const h=document.createElement('div');h.className='pcat';h.textContent=cat;L.appendChild(h);
+    const w=document.createElement('div');w.className='pchips';items.forEach(n=>w.appendChild(playChip(n)));L.appendChild(w)})}
+$('playAdd').onclick=()=>{const n=$('playName').value.trim();if(!n)return;if(!playExtra.includes(n))playExtra.push(n);play[n]='y';$('playName').value='';savePlay();renderPlay()};
+$('playName').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('playAdd').click()}});
+let prArmed=false;$('playReset').onclick=()=>{if(!prArmed){prArmed=true;$('playReset').textContent='Tap again: everything except No becomes her call';setTimeout(()=>{prArmed=false;$('playReset').textContent='Let her decide everything'},3500);return}
+  prArmed=false;$('playReset').textContent='Let her decide everything';Object.keys(play).forEach(k=>{if(play[k]!=='n')delete play[k]});savePlay();renderPlay();toast('Everything is her call now, except your Nos')};
+function showTab(t){$('paneT').hidden=t!=='T';$('paneP').hidden=t!=='P';$('tabT').classList.toggle('on',t==='T');$('tabP').classList.toggle('on',t==='P');if(t==='P')renderPlay()}
+$('tabT').onclick=()=>showTab('T');$('tabP').onclick=()=>showTab('P');
+function playPrompt(){const by=v=>Object.keys(play).filter(k=>play[k]===v);const y=by('y'),m=by('m'),n=by('n');
+  if(!y.length&&!m.length&&!n.length)return '\n- His play preferences: none set, so everything within his profile is your call. Introduce new things gently and watch his feedback.';
+  return '\n- His play preferences (from his checklist):'+(y.length?'\n  INTO IT: '+y.join(', ')+'.':'')+(m.length?'\n  CURIOUS (introduce gently, check in): '+m.join(', ')+'.':'')+(n.length?'\n  HARD NO, never do, suggest or mention as a task: '+n.join(', ')+'.':'')+'\n  Anything not listed is your call.'}
+
 /* session settings */
 const MOODS=['Sweet','Warm and playful','Teasing','Strict','Mean'];
 const MOOD_TXT=['Be very sweet, gentle, affectionate and encouraging. No harshness at all.',
@@ -464,7 +513,7 @@ const PRIV_TXT=['He is NOT private: other people are nearby. Keep everything dis
 const LENS=[0,10,15,20,30,45,60,90];
 function lenLabel(v){return LENS[v]?LENS[v]+' minutes':'Open-ended'}
 let sess=store.get('sess',{mood:3,priv:4,len:0,aro:3,start:0,end:0});
-const STYLES=[['ai','Ada decides everything','Ada is fully in charge of where the session goes, what happens next, which toys are used and when.'],
+const STYLES=[['ai','She decides everything','You are fully in charge of where the session goes, what happens next, which toys are used and when.'],
  ['tease','Slow tease and build','Keep it slow: teasing, building anticipation, making him wait.'],
  ['tasks','Tasks and photo checks','Focus on giving him tasks and checking them with photo checks.'],
  ['toys','Toy-focused','Focus the session on the selected toys.'],
@@ -511,7 +560,7 @@ function sessLabels(){
 function sessPrompt(){
   const st=STYLES.find(x=>x[0]===(sess.style||'ai'))||STYLES[0];
   const have=toys.map(t=>t.n+(t.wear?' [wearing now]':'')+(t.online?(t.conn?' [app toy, connected]':' [app toy, not connected]'):'')).join(', ')||'none listed';
-  let t='\n\nCurrent session settings (chosen by Tim, follow them):\n- Your mood: '+MOOD_TXT[sess.mood-1]+'\n- Privacy: '+PRIV_TXT[sess.priv-1]+'\n- His arousal when he set this: '+sess.aro+' out of 10. Match your pace to it, and you can ask how it has changed.'+'\n- Direction: '+st[2]+'\n- Toys he has: '+have+'.'+((sess.toys&&sess.toys.length)?'\n- Toys he chose for this session: '+sess.toys.join(', ')+'.':'\n- He left the choice of toys to you.')+toyRules();
+  let t='\n\nCurrent session settings (chosen by Tim, follow them):\n- Your mood: '+MOOD_TXT[sess.mood-1]+'\n- Privacy: '+PRIV_TXT[sess.priv-1]+'\n- His arousal when he set this: '+sess.aro+' out of 10. Match your pace to it, and you can ask how it has changed.'+'\n- Direction: '+st[2]+'\n- Toys he has: '+have+'.'+((sess.toys&&sess.toys.length)?'\n- Toys he chose for this session: '+sess.toys.join(', ')+'.':'\n- He left the choice of toys to you.')+toyRules()+playPrompt();
   if(sess.end){const left=Math.round((sess.end-Date.now())/60000);
     t+=left>0?'\n- Session length: '+LENS[sess.len]+' minutes, about '+left+' minutes left. Pace things to fit, and start wrapping up in the last few minutes.':'\n- The planned session time is over. Wrap up warmly now unless he asks for more.';}
   else t+='\n- Session length: open-ended.';
@@ -546,10 +595,10 @@ $('sessStart').onclick=()=>{sess.start=0;applySess();history=[];saveHistory();ch
 async function kickoff(){if(!apiKey||busy)return;busy=true;
   history.push({who:'me',hide:true,text:'[The app: I just started a new session with the settings in your instructions. Open the session in character and take the lead.]'});saveHistory();
   const t=bubble('typing…','them typing');
-  try{handleReply(t,await askGrok())}catch(e){t.remove();markLatest();note(e&&e.msg?e.msg:'Couldn\u2019t reach Ada. Say hi to start.')}
+  try{handleReply(t,await askGrok())}catch(e){t.remove();markLatest();note(e&&e.msg?e.msg:'Couldn\u2019t reach her. Say hi to start.')}
   busy=false}
 let sessTick=null;
-function sessStatus(){clearInterval(sessTick);const upd=()=>{if(check)return;const base=(settings.name||'Ada')+' · online';
+function sessStatus(){clearInterval(sessTick);const upd=()=>{if(check)return;const base=(settings.name||'Vesper')+' · online';
   if(sess.end){const left=Math.ceil((sess.end-Date.now())/60000);$('status').textContent=left>0?base+' · '+left+' min left':base+' · time’s up'}else if(apiKey)$('status').textContent=base};
   upd();if(sess.end)sessTick=setInterval(upd,30000)}
 
@@ -561,7 +610,7 @@ function renderNotes(){const L=$('notesList');L.innerHTML='';if(!notes.length){L
 $('adaMem').value=adaMem;$('adaMem').oninput=e=>{adaMem=e.target.value;store.set('profile',adaMem)};
 renderNotes();
 function saveNotes(reply){const found=[...String(reply).matchAll(/\[NOTE:\s*([^\]]{3,400})\]/gi)].map(m=>m[1].trim());if(!found.length)return;
-  const d=new Date().toLocaleDateString('en-CA');found.slice(0,3).forEach(t=>notes.push({d,t}));notes=notes.slice(-60);store.set('notes',notes);renderNotes();note('📝 Ada saved '+found.length+' note'+(found.length>1?'s':''))}
+  const d=new Date().toLocaleDateString('en-CA');found.slice(0,3).forEach(t=>notes.push({d,t}));notes=notes.slice(-60);store.set('notes',notes);renderNotes();note('📝 '+(settings.name||'Vesper')+' saved '+found.length+' note'+(found.length>1?'s':''))}
 const CURRENT_FACTS="\n\nCURRENT FACTS (these override anything older above):\n- This chat runs in Tim's own app, which exists only for your sessions: you are ALWAYS in character here. KINK is not needed in this app (if he types it anyway, just play along).\n- A session starts when Tim taps Start in the app; it then sends you his privacy, time, arousal, direction and chosen toys (see session settings below). Never ask him for P, T or A; you already have them. Open the session yourself and take the lead straight away. Ask about wishes only if it adds something.\n- VOIDLOCK is now a persistent lockout: it stops all toys and blocks commands until Tim resets it himself. If he types VOIDLOCK the app triggers it automatically.\n- Tim removed the old intensity, duration and three-stage limits on toy commands; ignore them. Toys can only be controlled through the tags explained below, and only toys marked connected.\n- The key safe is ordered but not connected. E-stim is not connected.\n- Never give advice on medication doses or timing. If he says his medication feels too strong, suggest he speaks to his doctor.\n- With nipple clamps, build in regular breaks and have him check for numbness or colour change.\n- Quick commands KINK, MORE, EASY, SKIP, STATUS, END and VOIDLOCK work as in his instructions. On END, include [STOP] if toys may still be running.\n- Learning: after END feedback (best / less / next), or whenever you learn something worth keeping, add 1 to 3 short factual notes as [NOTE: ...]. The page hides and saves them and gives them back to you every session.";
 function memPrompt(){let t='';
   if(adaMem.trim())t+='\n\nABOUT TIM AND HOW YOUR SESSIONS WORK (his saved instructions and memory):\n'+adaMem.trim();
@@ -610,7 +659,7 @@ function setCheck(due,cam){
   const delay=Math.round((due-Date.now())/1000);
   if(settings.alertOn&&delay>=20&&delay<=2100)alertMake({action:'PHOTO_CHECK_START',request_id:id,delay_s:String(delay),buzz:settings.buzzOn?'yes':'no'});
 }
-function clearCheck(){if(check&&check.id&&check.due>Date.now()-60000)alertMake({action:'PHOTO_CHECK_CANCEL'});check=null;store.set('check',null);if(checkCard){checkCard.remove();checkCard=null}clearInterval(tick);tick=null;$('status').textContent=apiKey?(settings.name||'Ada')+' · online':'Add your key in ☰';if(typeof sessStatus==='function')sessStatus()}
+function clearCheck(){if(check&&check.id&&check.due>Date.now()-60000)alertMake({action:'PHOTO_CHECK_CANCEL'});check=null;store.set('check',null);if(checkCard){checkCard.remove();checkCard=null}clearInterval(tick);tick=null;$('status').textContent=apiKey?(settings.name||'Vesper')+' · online':'Add your key in ☰';if(typeof sessStatus==='function')sessStatus()}
 function renderCheck(){
   clearInterval(tick); if(!check)return;
   if(!checkCard){checkCard=document.createElement('div');checkCard.className='checkcard';checkCard.innerHTML='<div class="ck-title"></div><div class="row ck-btns" hidden><button class="btn primary" data-cam="front">Front camera</button><button class="btn primary" data-cam="back">Back camera</button></div>';checkCard.querySelectorAll('button').forEach(b=>b.onclick=()=>openCam(b.dataset.cam));chat.appendChild(checkCard)}
@@ -618,7 +667,7 @@ function renderCheck(){
   const upd=()=>{const left=check.due-Date.now();const ready=left<=0;
     const win=check.win||0, winLeft=win?check.due+win*1000-Date.now():0;
     if(ready&&win&&!check.camAt&&winLeft<=0){missCheck();return}
-    checkCard.querySelector('.ck-title').textContent=ready?('📷 Photo check: '+(settings.name||'Ada')+' wants to see. '+(win&&!check.camAt?Math.ceil(winLeft/1000)+'s left!':'Take it now.')):'📷 Photo check in '+fmt(left);
+    checkCard.querySelector('.ck-title').textContent=ready?('📷 Photo check: '+(settings.name||'Vesper')+' wants to see. '+(win&&!check.camAt?Math.ceil(winLeft/1000)+'s left!':'Take it now.')):'📷 Photo check in '+fmt(left);
     checkCard.querySelector('.ck-btns').hidden=!ready; checkCard.classList.toggle('ready',ready);
     checkCard.querySelectorAll('button').forEach(b=>b.classList.toggle('primary',b.dataset.cam===check.cam));
     $('status').textContent=ready?'Waiting for your photo':'Photo check in '+fmt(left);
@@ -642,7 +691,7 @@ async function sendPhoto(file,cam){
   if(!file||busy)return;
   let data;try{data=await shrinkData(file,1280)}catch(e){toast('Couldn’t read that photo. Try again.');return}
   busy=true; const wasCheck=!!check; const mins=wasCheck&&checkSetAt?Math.round((Date.now()-checkSetAt)/60000):null;
-  bubble('📷 Photo sent','me'); const t=bubble((settings.name||'Ada')+' is looking…','them typing');
+  bubble('📷 Photo sent','me'); const t=bubble((settings.name||'Vesper')+' is looking…','them typing');
   const info=(wasCheck?'Here is my photo for the photo check':'Here is a photo')+' ('+(cam==='back'?'back':'front')+' camera'+(mins!==null?', '+mins+' min after you set the check':'')+'). Check it carefully.';
   try{
     const reply=await askGrok({role:'user',content:[{type:'image_url',image_url:{url:data,detail:'high'}},{type:'text',text:info}]});
@@ -664,10 +713,10 @@ $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.pre
 $('input').addEventListener('input',autosize);
 $('keyShow').onclick=()=>{const i=$('apiKey');const sh=i.type==='password';i.type=sh?'text':'password';$('keyShow').textContent=sh?'Hide':'Show'};
 $('keyCopy').onclick=async()=>{if(!apiKey){toast('No key saved yet');return}try{await navigator.clipboard.writeText(apiKey);toast('Key copied')}catch(e){const i=$('apiKey');i.type='text';$('keyShow').textContent='Hide';i.focus();i.select();toast('Tap and hold the key, then Copy')}};
-$('apiKey').value=apiKey;$('apiKey').oninput=e=>{apiKey=e.target.value.trim();store.set('key',apiKey);$('status').textContent=apiKey?(settings.name||'Ada')+' · online':'Add your key in ☰'};
+$('apiKey').value=apiKey;$('apiKey').oninput=e=>{apiKey=e.target.value.trim();store.set('key',apiKey);$('status').textContent=apiKey?(settings.name||'Vesper')+' · online':'Add your key in ☰'};
 $('persona').value=persona;
 $('persona').oninput=e=>{persona=e.target.value;store.set('persona',persona)};
-$('resetPersona').onclick=()=>{persona=DEFAULT_PERSONA;$('persona').value=persona;store.set('persona',persona);toast('Default personality restored')};
+let rpArmed=false;$('resetPersona').onclick=()=>{if(!rpArmed){rpArmed=true;$('resetPersona').textContent='Tap again to replace with basic';setTimeout(()=>{rpArmed=false;$('resetPersona').textContent='Reset to basic'},3000);return}rpArmed=false;$('resetPersona').textContent='Reset to basic';persona=DEFAULT_PERSONA;$('persona').value=persona;store.set('persona',persona);toast('Basic character restored')};
 $('newChat').onclick=()=>{$('sheet').hidden=true;openSess(true)};
 $('void').onclick=async()=>{if(check)clearCheck();note('VOIDLOCK sent…');
   const r=await toyCall({action:'VOIDLOCK'});const ok=toyOk(r)||(r&&r.lock_write_confirmed);
@@ -720,7 +769,7 @@ async function dataToBlob(d){const r=await fetch(d);return r.blob()}
 $('backupBtn').onclick=async()=>{
   toast('Making backup…');
   const pics=[];for(const p of photos){const d=await blobToData(p.blob);if(d)pics.push(d)}
-  const data={app:'afterdark',version:1,saved:new Date().toISOString(),settings,persona,history,toys,sess,profile:adaMem,notes,photos:pics};
+  const data={app:'afterdark',version:1,saved:new Date().toISOString(),settings,persona,history,toys,sess,profile:adaMem,notes,play,playExtra,photos:pics};
   const now=new Date(),day=now.toLocaleDateString('en-CA')+'-'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0');
   const file=new File([JSON.stringify(data)],'after-dark-backup-'+day+'.json',{type:'application/json'});
   try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});toast('Backup ready');return}}catch(e){if(e&&e.name==='AbortError'){toast('Backup cancelled');return}}
@@ -734,6 +783,7 @@ $('restoreFile').addEventListener('change',async e=>{
   toast('Restoring…');
   if(Array.isArray(data.photos)&&db){for(const p of photos)await delPhoto(p.id);for(const d of data.photos){try{await addPhoto(await dataToBlob(d))}catch(err){}}}
   if(data.settings){settings=Object.assign(settings,data.settings);['onReply','onOpen','onTimer','minutes','shuffle','dim','blur','name','photosOn','bubbleA','solo'].forEach(k=>store.set(k,settings[k]))}
+  if(data.play&&typeof data.play==='object'){play=data.play;playExtra=Array.isArray(data.playExtra)?data.playExtra:[];savePlay()}
   if(typeof data.profile==='string'){adaMem=data.profile;store.set('profile',adaMem);$('adaMem').value=adaMem}
   if(Array.isArray(data.notes)&&(data.kind!=='profile'||!notes.length)){notes=data.notes;store.set('notes',notes);renderNotes()}
   if(Array.isArray(data.toys)){if(data.kind==='profile'){data.toys.forEach(t=>{if(!toys.some(x=>x.n.toLowerCase()===t.n.toLowerCase()))toys.push(t)});saveToys()}else{toys=data.toys;saveToys()}}if(data.sess){sess=data.sess;store.set('sess',sess)}
@@ -742,13 +792,13 @@ $('restoreFile').addEventListener('change',async e=>{
   [['m-reply','onReply'],['m-open','onOpen'],['m-timer','onTimer']].forEach(([id,k])=>$(id).checked=!!settings[k]);$('bubbleA').value=settings.bubbleA;$('solo').checked=settings.solo;
   $('minutes').value=String(settings.minutes);$('shuffle').checked=settings.shuffle;$('dim').value=settings.dim;$('blur').value=settings.blur;$('nameInput').value=settings.name;$('photosOn').checked=settings.photosOn;
   applyLook();applyTimer();await refresh();next();
-  toast(data.kind==='profile'?'Ada\u2019s profile loaded':'Restored '+photos.length+' photos and your chat');
+  toast(data.kind==='profile'?'Her profile loaded':'Restored '+photos.length+' photos and your chat');
 });
 
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&settings.onOpen)next()});
 
 (async()=>{applyLook();await openDB();await refresh();next();applyTimer()})();
-$('status').textContent=apiKey?(settings.name||'Ada')+' · online':'Add your key in ☰';
+$('status').textContent=apiKey?(settings.name||'Vesper')+' · online':'Add your key in ☰';
 if(check)renderCheck();
 sessStatus();
 </script>
