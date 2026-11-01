@@ -56,6 +56,12 @@ header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-top:c
 .typing{opacity:.7;font-style:italic}
 .composer{display:flex;gap:8px;align-items:flex-end;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:rgba(20,8,14,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line)}
 .composer textarea{flex:1;min-width:0;resize:none;max-height:120px;background:rgba(255,255,255,.08);border:1px solid var(--line);color:var(--ink);border-radius:20px;padding:10px 14px;font:inherit;font-size:16px}
+.laf{margin:0 12px 8px;padding:10px 14px;border-radius:16px;background:rgba(30,10,18,.88);border:1px solid var(--rose);display:flex;flex-direction:column;gap:6px;transition:opacity .4s ease,transform .4s ease}
+.laf.gone{opacity:0;transform:translateY(12px)}
+.lafrow{display:flex;align-items:center;gap:10px;font-size:14px}
+.lafrow span{width:58px;color:var(--ink-soft)}
+.lafrow input{flex:1}
+.lafrow b{width:22px;text-align:right}
 .lockbar{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 16px;background:rgba(90,20,30,.85);border-top:1px solid var(--line);font-size:14px}
 .checkcard{align-self:stretch;background:rgba(40,16,26,.85);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .checkcard.ready{border-color:var(--rose)}
@@ -125,6 +131,12 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     
   </main>
 
+  <div class="laf" id="laf" hidden>
+    <div class="lafrow"><span>Liked</span><input type="range" id="lafL" min="1" max="10" step="1"><b id="lafLv"></b></div>
+    <div class="lafrow"><span>Arousal</span><input type="range" id="lafA" min="0" max="10" step="1"><b id="lafAv"></b></div>
+    <div class="lafrow"><span>Did it?</span><div class="row" style="gap:6px;flex:1"><button class="tab" data-f="Y">Yes</button><button class="tab" data-f="P">Partly</button><button class="tab" data-f="N">No</button></div></div>
+    <div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" id="lafX">✕</button><button class="btn primary" id="lafSend">Send</button></div>
+  </div>
   <div class="lockbar" id="lockBar" hidden><span>🔒 Toys locked by VOIDLOCK</span><button class="btn" id="unlockBtn">Unlock</button></div>
   <div class="cam-menu" id="camMenu" hidden><button class="btn" data-cam="front">Front camera</button><button class="btn" data-cam="back">Back camera</button></div>
   <div class="composer">
@@ -265,7 +277,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     </section>
     <section class="slider">
       <h3>Session length</h3>
-      <input type="range" id="sLen" min="0" max="7" step="1">
+      <input type="range" id="sLen" min="0" max="15" step="1">
       <span id="sLenL"></span>
     </section>
     <section class="slider">
@@ -400,7 +412,7 @@ let hushT=null;
 function wake(){chat.classList.remove('hush');clearTimeout(hushT);const sec=+(store.get('hideSec',0));if(sec)hushT=setTimeout(()=>{if(!busy&&document.activeElement!==$('input'))chat.classList.add('hush')},sec*1000)}
 chat.addEventListener('click',wake);$('input').addEventListener('focus',wake);
 const TAG=/\[PHOTO(?:\s+(now|\d{1,3}))?(?:\s*(?:min|mins|minutes)?)?(?:\s+(front|back))?\s*\]/i;
-function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|NOTE:[^\]]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
+function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
 history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'));
 function saveHistory(){history=history.slice(-60);store.set('history',history)}
 const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, 0 to 120, then front or back camera). Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a check comes due he only has a short window to take the photo; if he misses it the page will tell you. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
@@ -469,15 +481,22 @@ showLock();
 
 /* play preferences: '' = her call, y = into it, m = curious, n = no (hard limit) */
 const PLAY=[
- ['Control and rules',['Being told what to do','Rules and protocols','Tasks and challenges','Earning rewards','Non-physical punishments','Begging','Asking permission to cum','Tease and denial','Edging','Ruined orgasms','Multiple orgasms','Orgasm countdowns','Chastity','Key-holding','Timed lockbox','Long-term control']],
- ['Words and attitude',['Praise','Pet names','Dirty talk','Verbal humiliation','Degradation','Size teasing','Mocking and laughing','Strict tone','Cold or ignoring','Body teasing']],
- ['Sensation and pain',['Nipple clamps','Nipple play','Clothes pegs','Spanking (self)','Paddles and implements','Ice and cold','Hot wax','Scratching','Tickling','Genital pain (CBT)','Ball play','E-stim']],
- ['Restraint',['Handcuffs','Rope','Self-bondage','Blindfold','Gag','Holding positions','Stillness tasks']],
- ['Toys',['Vibrators','App-controlled toys','Strokers','Anal toys','Plugs','Prostate play','Pegging fantasy','Toys worn for long periods']],
- ['Body and exercise',['Exercise tasks','Endurance holds','Workouts while aroused','Training goals over weeks','Body photo checks']],
- ['Fluids and taboo',['Precum tasting','Cum eating (CEI)','Mess and clean-up tasks','Watersports']],
- ['Exposure and public',['Discreet public tasks','Wearing toys out','Underwear and clothing rules','Being photographed for her','Video tasks']],
- ['Roleplay and fantasy',['Goddess worship','Being her toy or object','Pet play','Servant or maid','Feminization','Sissy play','Cuckold fantasy','Strict teacher or boss','Interrogation fantasy']]
+ ['Control and rules',['Being told what to do','Rules and protocols','Tasks and challenges','Asking permission','Begging','Earning rewards','Points and penalties','Non-physical punishments','Writing lines','Confessions','Daily rules','Morning and bedtime rituals','Check-ins through the day','Random surprise tasks','Dice or card decisions','Long-term control']],
+ ['Orgasm control',['Tease and denial','Edging','Edge counts','Stop and start','Ruined orgasms','Multiple orgasms','Orgasm countdowns','Cum on command','Hands-free attempts','Post-orgasm stimulation','Denial streaks (days)','Orgasm schedule']],
+ ['Chastity',['Chastity cage','Key-holding','Timed lockbox','Long-term chastity','Cage photo checks','Release scheduling','Teasing while caged']],
+ ['Her instructions (JOI)',['Following her pace','Stroke counts','Techniques she chooses','Non-dominant hand','Slow motion','Tip only','Using porn on instruction','No porn allowed','Mirror tasks','Gooning sessions']],
+ ['Words and mind',['Praise','Pet names','Dirty talk','Verbal humiliation','Degradation','Size teasing','Mocking and laughing','Teasing about arousal','Body teasing','Strict tone','Cold or ignoring','Objectification','Comparison to other men','Jealousy play','Mind games and uncertainty','Mantras and repeating lines','Trance-style talk']],
+ ['Sensation and pain',['Nipple clamps','Weighted clamps','Nipple play','Clothes pegs','Spanking (self)','Paddles and implements','Ice and cold','Hot and cold contrast','Hot wax','Scratching','Feathers and light touch','Pinwheel','Tickling','Overstimulation','Genital pain (CBT)','Ball play','Ball weights or stretcher','E-stim']],
+ ['Restraint',['Handcuffs','Rope','Self-bondage','Ice-timer release','Blindfold','Gag','Collar','Cock ring','Holding positions','Stillness tasks','Kneeling','Spread positions']],
+ ['Toys',['Vibrators','App-controlled toys','Strokers','Handy','Suction toys','Dildos','Anal toys','Plugs','Prostate play','Prostate-only orgasm','Riding tasks','Pegging fantasy','Toys worn for long periods','Lube rules']],
+ ['Body and exercise',['Exercise tasks','Ab work','Glute work','Endurance holds','Cardio','Workouts while aroused','Stretching','Posture training','Cold showers','Grooming and shaving rules','Training goals over weeks','Body measurements','Body photo checks']],
+ ['Fluids and taboo',['Precum tasting','Cum eating (CEI)','Mess and clean-up tasks','Licking tasks','Spit','Watersports']],
+ ['Dress and feminization',['Panties','Lingerie','Stockings','Heels','Make-up','Nail polish','Wig','Feminine name','Feminine voice and manners','Maid outfit','Sissy tasks','Sissy hypno']],
+ ['Exposure and public',['Discreet public tasks','Wearing toys out','Underwear and clothing rules','Nudity at home','Private outdoor tasks','Risk of being caught (fantasy)','Being photographed for her','Video tasks']],
+ ['Worship',['Goddess worship','Body worship','Foot worship','Ass worship','Serving her','Gratitude rituals']],
+ ['Roleplay and fantasy',['Being her toy or object','Pet play','Servant or maid','Strict teacher or boss','Personal trainer','Nurse or doctor','Interrogation','Captive fantasy','Bratty sub and punishment','Girlfriend or wife','Older woman','Stranger','Cuckold fantasy','Bi fantasy','Being shared (fantasy)','Watching women together']],
+ ['Media',['Lesbian JOI','Women dancing','Women masturbating','CEI content','Hypno audio','Stories she writes','Images she describes']],
+ ['Time and structure',['Short sessions','Long sessions','All-day control','Overnight tasks','Multi-day challenges','Weekend takeovers']]
 ];
 let play=store.get('play',{});let playExtra=store.get('playExtra',[]);
 const PLAY_NEXT={'':'y',y:'m',m:'n',n:''};
@@ -510,8 +529,10 @@ const PRIV_TXT=['He is NOT private: other people are nearby. Keep everything dis
  'He is fairly private, but keep things reasonably discreet.',
  'He is private.',
  'He is completely alone and private. No need for discretion.'];
-const LENS=[0,10,15,20,30,45,60,90];
-function lenLabel(v){return LENS[v]?LENS[v]+' minutes':'Open-ended'}
+const LENS=[0,10,15,20,30,45,60,90,120,180,240,360,480,720,1440,2880];
+function fmtMins(m){m=Math.round(m);if(m<60)return m+(m===1?' minute':' minutes');if(m<1440){const h=Math.round(m/6)/10;return h+(h===1?' hour':' hours')}const d=Math.round(m/144)/10;return d+(d===1?' day':' days')}
+function shortLeft(m){return m<60?m+' min':m<1440?Math.floor(m/60)+'h '+(m%60)+'m':Math.floor(m/1440)+'d '+Math.floor((m%1440)/60)+'h'}
+function lenLabel(v){return LENS[v]?fmtMins(LENS[v]):'Open-ended'}
 let sess=store.get('sess',{mood:3,priv:4,len:0,aro:3,start:0,end:0});
 const STYLES=[['ai','She decides everything','You are fully in charge of where the session goes, what happens next, which toys are used and when.'],
  ['tease','Slow tease and build','Keep it slow: teasing, building anticipation, making him wait.'],
@@ -562,7 +583,7 @@ function sessPrompt(){
   const have=toys.map(t=>t.n+(t.wear?' [wearing now]':'')+(t.online?(t.conn?' [app toy, connected]':' [app toy, not connected]'):'')).join(', ')||'none listed';
   let t='\n\nCurrent session settings (chosen by Tim, follow them):\n- Your mood: '+MOOD_TXT[sess.mood-1]+'\n- Privacy: '+PRIV_TXT[sess.priv-1]+'\n- His arousal when he set this: '+sess.aro+' out of 10. Match your pace to it, and you can ask how it has changed.'+'\n- Direction: '+st[2]+'\n- Toys he has: '+have+'.'+((sess.toys&&sess.toys.length)?'\n- Toys he chose for this session: '+sess.toys.join(', ')+'.':'\n- He left the choice of toys to you.')+toyRules()+playPrompt();
   if(sess.end){const left=Math.round((sess.end-Date.now())/60000);
-    t+=left>0?'\n- Session length: '+LENS[sess.len]+' minutes, about '+left+' minutes left. Pace things to fit, and start wrapping up in the last few minutes.':'\n- The planned session time is over. Wrap up warmly now unless he asks for more.';}
+    t+=left>0?'\n- Session length: '+fmtMins(LENS[sess.len])+', about '+fmtMins(left)+' left'+(LENS[sess.len]>=480?'. This is a long session: give tasks and check-ins spread over time, and let him live his day in between.':'. Pace things to fit, and start wrapping up near the end.'):'\n- The planned session time is over. Wrap up warmly now unless he asks for more.';}
   else t+='\n- Session length: open-ended.';
   return t;
 }
@@ -599,7 +620,7 @@ async function kickoff(){if(!apiKey||busy)return;busy=true;
   busy=false}
 let sessTick=null;
 function sessStatus(){clearInterval(sessTick);const upd=()=>{if(check)return;const base=(settings.name||'Vesper')+' · online';
-  if(sess.end){const left=Math.ceil((sess.end-Date.now())/60000);$('status').textContent=left>0?base+' · '+left+' min left':base+' · time’s up'}else if(apiKey)$('status').textContent=base};
+  if(sess.end){const left=Math.ceil((sess.end-Date.now())/60000);const nm=(settings.name||'Vesper');$('status').textContent=left>0?nm+' · '+shortLeft(left)+' left':nm+' · time’s up'}else if(apiKey)$('status').textContent=base};
   upd();if(sess.end)sessTick=setInterval(upd,30000)}
 
 /* Ada's memory and notes (device only) */
@@ -611,7 +632,7 @@ $('adaMem').value=adaMem;$('adaMem').oninput=e=>{adaMem=e.target.value;store.set
 renderNotes();
 function saveNotes(reply){const found=[...String(reply).matchAll(/\[NOTE:\s*([^\]]{3,400})\]/gi)].map(m=>m[1].trim());if(!found.length)return;
   const d=new Date().toLocaleDateString('en-CA');found.slice(0,3).forEach(t=>notes.push({d,t}));notes=notes.slice(-60);store.set('notes',notes);renderNotes();note('📝 '+(settings.name||'Vesper')+' saved '+found.length+' note'+(found.length>1?'s':''))}
-const CURRENT_FACTS="\n\nCURRENT FACTS (these override anything older above):\n- This chat runs in Tim's own app, which exists only for your sessions: you are ALWAYS in character here. KINK is not needed in this app (if he types it anyway, just play along).\n- A session starts when Tim taps Start in the app; it then sends you his privacy, time, arousal, direction and chosen toys (see session settings below). Never ask him for P, T or A; you already have them. Open the session yourself and take the lead straight away. Ask about wishes only if it adds something.\n- VOIDLOCK is now a persistent lockout: it stops all toys and blocks commands until Tim resets it himself. If he types VOIDLOCK the app triggers it automatically.\n- Tim removed the old intensity, duration and three-stage limits on toy commands; ignore them. Toys can only be controlled through the tags explained below, and only toys marked connected.\n- The key safe is ordered but not connected. E-stim is not connected.\n- Never give advice on medication doses or timing. If he says his medication feels too strong, suggest he speaks to his doctor.\n- With nipple clamps, build in regular breaks and have him check for numbness or colour change.\n- Quick commands KINK, MORE, EASY, SKIP, STATUS, END and VOIDLOCK work as in his instructions. On END, include [STOP] if toys may still be running.\n- Learning: after END feedback (best / less / next), or whenever you learn something worth keeping, add 1 to 3 short factual notes as [NOTE: ...]. The page hides and saves them and gives them back to you every session.";
+const CURRENT_FACTS="\n\nCURRENT FACTS (these override anything older above):\n- This chat runs in Tim's own app, which exists only for your sessions: you are ALWAYS in character here. KINK is not needed in this app (if he types it anyway, just play along).\n- A session starts when Tim taps Start in the app; it then sends you his privacy, time, arousal, direction and chosen toys (see session settings below). Never ask him for P, T or A; you already have them. Open the session yourself and take the lead straight away. Ask about wishes only if it adds something.\n- VOIDLOCK is now a persistent lockout: it stops all toys and blocks commands until Tim resets it himself. If he types VOIDLOCK the app triggers it automatically.\n- Tim removed the old intensity, duration and three-stage limits on toy commands; ignore them. Toys can only be controlled through the tags explained below, and only toys marked connected.\n- The key safe is ordered but not connected. E-stim is not connected.\n- Never give advice on medication doses or timing. If he says his medication feels too strong, suggest he speaks to his doctor.\n- With nipple clamps, build in regular breaks and have him check for numbness or colour change.\n- Quick commands KINK, MORE, EASY, SKIP, STATUS, END and VOIDLOCK work as in his instructions. On END, include [STOP] if toys may still be running.\n- Check-ins: when you want his L/A/F, end your message with [CHECKIN]. The app shows him quick sliders and sends back something like 'L7 A6 FY'. Don't spell out what L, A and F mean every time.\n- Learning: after END feedback (best / less / next), or whenever you learn something worth keeping, add 1 to 3 short factual notes as [NOTE: ...]. The page hides and saves them and gives them back to you every session.";
 function memPrompt(){let t='';
   if(adaMem.trim())t+='\n\nABOUT TIM AND HOW YOUR SESSIONS WORK (his saved instructions and memory):\n'+adaMem.trim();
   if(notes.length)t+='\n\nYOUR NOTES FROM PAST SESSIONS (oldest first):\n'+notes.map(n=>'- '+n.d+': '+n.t).join('\n');
@@ -630,7 +651,18 @@ async function askGrok(extra){
   if(!reply)throw {msg:'Grok sent back an empty reply. Try again.'};
   return reply;
 }
+/* quick L/A/F check-in panel */
+let lafF='Y',lafT=null;
+function lafVals(){$('lafLv').textContent=$('lafL').value;$('lafAv').textContent=$('lafA').value;$('laf').querySelectorAll('[data-f]').forEach(b=>b.classList.toggle('on',b.dataset.f===lafF))}
+function lafIdle(){clearTimeout(lafT);lafT=setTimeout(hideLaf,30000)}
+function showLaf(){$('lafL').value=7;$('lafA').value=sess.aro;lafF='Y';lafVals();const p=$('laf');p.hidden=false;p.classList.add('gone');requestAnimationFrame(()=>p.classList.remove('gone'));lafIdle()}
+function hideLaf(){clearTimeout(lafT);const p=$('laf');p.classList.add('gone');setTimeout(()=>{p.hidden=true},400)}
+['lafL','lafA'].forEach(id=>$(id).oninput=()=>{lafVals();lafIdle()});
+$('laf').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{lafF=b.dataset.f;lafVals();lafIdle()});
+$('lafX').onclick=hideLaf;
+$('lafSend').onclick=()=>{const l=$('lafL').value,a=$('lafA').value;sess.aro=+a;store.set('sess',sess);hideLaf();$('input').value='L'+l+' A'+a+' F'+lafF;send()};
 function handleReply(t,reply){
+  if(/\[CHECKIN\]/i.test(reply)||/\bL\s*[,\/]?\s*A\s*[,\/]?\s*(?:and\s+)?F\b/.test(reply))setTimeout(showLaf,600);
   t.classList.remove('typing'); t.textContent=clean(reply)||'…'; history.push({who:'them',text:reply}); saveHistory();
   const m=reply.match(TAG);
   if(m){const mins=(!m[1]||m[1].toLowerCase()==='now')?0:Math.min(120,parseInt(m[1],10));setCheck(Date.now()+mins*60000,(m[2]||'front').toLowerCase())}
