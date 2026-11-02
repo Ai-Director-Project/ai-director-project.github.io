@@ -123,7 +123,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     <button class="avatar" id="avatar" aria-label="Photos on or off" style="border:none;padding:0">A</button>
     <div class="who">
       <h1 id="name">Vesper</h1>
-      <p id="status">Connecting…</p>
+      <p id="status">Connecting…</p><p id="timerBadge" hidden style="margin:0;font-size:12px;opacity:.85"></p>
     </div>
     <button class="iconbtn" id="sessBtn" aria-label="Session settings">♡</button>
     <button class="iconbtn" id="toysBtn" aria-label="Toys">✦</button>
@@ -448,7 +448,7 @@ let hushT=null;
 function wake(){chat.classList.remove('hush');clearTimeout(hushT);const sec=+(store.get('hideSec',0));if(sec)hushT=setTimeout(()=>{if(!busy&&document.activeElement!==$('input'))chat.classList.add('hush')},sec*1000)}
 chat.addEventListener('click',wake);$('input').addEventListener('focus',wake);
 const TAG=/\[PHOTO(?:\s+(now|\d{1,3}))?(?:\s*(?:min|mins|minutes)?)?(?:\s+(front|back))?\s*\]/i;
-function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
+function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*|TIMER [^\]]*|AFTER [^\]]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
 history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'));
 function saveHistory(){const cut=history.length-60;if(cut>0){const lost=history.slice(0,cut);if(lost.some(m=>!m.dg)&&typeof catchUp==='function')catchUp(true,lost)}history=history.slice(-60);store.set('history',history)}
 const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, 0 to 120, then front or back camera). Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a check comes due he only has a short window to take the photo; if he misses it the page will tell you. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
@@ -481,10 +481,10 @@ function connectedLov(){return toys.filter(t=>lovKey(t.n)&&t.conn)}
 function toyRules(){
   if(locked)return '\n- VOIDLOCK is active: all toys are stopped and locked. You cannot control any toy until Tim unlocks it himself. Don\u2019t ask him to unlock.';
   const c=connectedLov();if(!settings.adaCtl||!c.length)return '\n- You cannot switch app toys on or off from this chat right now, so tell him what to do with them instead. Only suggest toys he has.';
-  return '\n\nToy control: you CAN control these connected toys: '+c.map(t=>t.n).join(', ')+'. Put a tag anywhere in your message; the page hides it and runs it:\n[TOY Gemini 8 20] = vibrate Gemini at level 8 (0-20) for 20 seconds (max 300).\n[TOY Gemini preset wave 30] = built-in pattern (pulse, wave, fireworks, earthquake) for 30 seconds. Gemini only.\n[TOY Gemini pattern 2;5;8;12 3000 12] = custom steps (levels 0-20 separated by ;), milliseconds per step, total seconds. Gemini only.\n[STOP] = stop all toys.\nHush 2 and Tenera 2 support only the plain vibrate tag. Use at most two toy tags per message. Results of recent commands: '+(toyLog.length?toyLog.join('; '):'none yet')+'.';
+  return '\n\nToy control: you CAN control these connected toys: '+c.map(t=>t.n).join(', ')+'. Put a tag anywhere in your message; the page hides it and runs it:\n[TOY Gemini 8 20] = vibrate Gemini at level 8 (0-20) for 20 seconds (max 300).\n[TOY Gemini preset wave 30] = built-in pattern (pulse, wave, fireworks, earthquake) for 30 seconds. Gemini only.\n[TOY Gemini pattern 2;5;8;12 3000 12] = custom steps (levels 0-20 separated by ;), milliseconds per step, total seconds. Gemini only.\n[STOP] = stop all toys.\nPatterns run on the toy itself, so they\u2019re the best way to do on/off, pulsing, building or counting: e.g. 5 slow pulses = [TOY Gemini pattern 18;0 1000 10]; a build-up = [TOY Gemini pattern 3;6;9;12;15;18;20 4000 28].\nDelayed commands: [AFTER 90: TOY Gemini 10 30] or [AFTER 300: STOP] runs that command that many seconds later (max 3600), even if he doesn\u2019t reply. Use these to surprise him, to end things on time, or to schedule a sequence.\nHush 2 and Tenera 2 support only the plain vibrate tag (string several AFTER tags together for on/off with them). Use at most four toy or AFTER tags per message. Results of recent commands: '+(toyLog.length?toyLog.join('; '):'none yet')+'.';
 }
 async function runToyTags(reply){
-  if(!settings.adaCtl)return;const tags=[...reply.matchAll(TOYTAG)].slice(0,2);
+  if(!settings.adaCtl)return;const tags=[...reply.matchAll(TOYTAG)].slice(0,4);
   for(const m of tags){
     let f,label;
     if(m[11]){f={action:'GEMINI_STOP'};label='All toys stopped'}
@@ -497,6 +497,29 @@ async function runToyTags(reply){
     note((ok?'💗 ':'⚠️ ')+label+(ok?'':' — '+toyWhy(r)));
   }
 }
+
+/* timers and delayed toy commands */
+let later=store.get('later',[]);let laterTick=null;
+const TIMERTAG=/\[TIMER\s+(\d{1,4})(?:\s+([^\]]{1,60}))?\]/gi, AFTERTAG=/\[AFTER\s+(\d{1,4})\s*s?\s*:\s*((?:TOY [^\]]+)|STOP)\]/gi;
+function saveLater(){store.set('later',later);showLater()}
+function showLater(){const t=later.filter(x=>x.k==='timer').sort((a,b)=>a.due-b.due)[0];const el=$('timerBadge');if(!el)return;
+  if(!t){el.hidden=true;return}el.hidden=false;el.textContent='\u23F1 '+(t.label?t.label+' ':'')+fmt(t.due-Date.now())}
+function scheduleTags(reply){if(locked)return;let n=0;
+  for(const m of String(reply).matchAll(TIMERTAG)){const sec=Math.min(7200,+m[1]);if(sec>0)later.push({k:'timer',due:Date.now()+sec*1000,sec,label:(m[2]||'').trim()})}
+  for(const m of String(reply).matchAll(AFTERTAG)){if(n++>=4)break;const sec=Math.min(3600,+m[1]);later.push({k:'toy',due:Date.now()+sec*1000,cmd:'['+m[2].trim()+']'})}
+  later=later.slice(-20);saveLater();startLater()}
+function startLater(){clearInterval(laterTick);if(!later.length){showLater();return}laterTick=setInterval(runLater,1000);runLater()}
+async function runLater(){const now=Date.now();const due=later.filter(x=>x.due<=now);
+  if(due.length){later=later.filter(x=>x.due>now);saveLater();
+    for(const x of due){const late=now-x.due>180000;
+      if(x.k==='toy'){if(!late&&!locked)await runToyTags(x.cmd)}
+      else{note('\u23F1 Time\u2019s up'+(x.label?': '+x.label:''));try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}
+        if(!late)timerDone(x)}}}
+  if(!later.length)clearInterval(laterTick);showLater()}
+async function timerDone(x){for(let i=0;busy&&i<60;i++)await new Promise(r=>setTimeout(r,1000));if(busy||!apiKey)return;busy=true;
+  history.push({who:'me',hide:true,text:'[The app: your '+fmtMins(x.sec/60)+' timer'+(x.label?' ("'+x.label+'")':'')+' has just finished. Carry on in character.]'});saveHistory();
+  const t=bubble('typing\u2026','them typing');try{handleReply(t,await askGrok())}catch(e){t.remove();markLatest()}busy=false}
+function clearLater(){later=[];saveLater();clearInterval(laterTick)}
 
 /* VOIDLOCK lock state and unlock (human only; Ada's tags can't reach this) */
 const RESET_HOOK='https://hook.eu1.make.com/rbi4y93a2dilh9qxmgc77c6nnyy51ewo';
@@ -668,7 +691,7 @@ $('adaMem').value=adaMem;$('adaMem').oninput=e=>{adaMem=e.target.value;(store.se
 renderNotes();
 function saveNotes(reply){const found=[...String(reply).matchAll(/\[NOTE:\s*([^\]]{3,400})\]/gi)].map(m=>m[1].trim());if(!found.length)return;
   const d=new Date().toLocaleDateString('en-CA');found.slice(0,3).forEach(t=>notes.push({d,t}));notes=notes.slice(-60);(store.set('notes',notes),store.set('notesAt',Date.now()),syncSoon());renderNotes();note('📝 '+(settings.name||'Vesper')+' saved '+found.length+' note'+(found.length>1?'s':''))}
-const CURRENT_FACTS="\n\nCURRENT FACTS (these override anything older above):\n- This chat runs in Tim's own app, which exists only for your sessions: you are ALWAYS in character here. KINK is not needed in this app (if he types it anyway, just play along).\n- A session starts when Tim taps Start in the app; it then sends you his privacy, time, arousal, direction and chosen toys (see session settings below). Never ask him for his privacy, time or arousal; you already have them. Open the session yourself in character and lead the conversation, but don't give him actual tasks or toy instructions until he asks for one (e.g. 'give me a task'). Ask about wishes only if it adds something.\n- VOIDLOCK is now a persistent lockout: it stops all toys and blocks commands until Tim resets it himself. If he types VOIDLOCK the app triggers it automatically.\n- Tim removed the old intensity, duration and three-stage limits on toy commands; ignore them. Toys can only be controlled through the tags explained below, and only toys marked connected.\n- The key safe is ordered but not connected. E-stim is not connected.\n- Never give advice on medication doses or timing. If he says his medication feels too strong, suggest he speaks to his doctor.\n- With nipple clamps, build in regular breaks and have him check for numbness or colour change.\n- Quick commands KINK, MORE, EASY, SKIP, STATUS, END and VOIDLOCK work as in his instructions. On END, include [STOP] if toys may still be running.\n- Feedback: the app has sliders for how much he liked something, his arousal, and whether he did the task. Only ask for feedback after he has finished a task you gave him (never after ordinary chat, and never twice in a row); between tasks just read how he's doing from what he writes. To ask, end your message with [CHECKIN] and the sliders pop up for him. He can also send feedback whenever he likes; it arrives as a message starting 'My feedback:'. Take it on board and respond in character; never talk in letter codes like L, A or F.\n- TASKS MUST BE POSSIBLE AND THOUGHT THROUGH. Before you give Tim any task, request or photo, silently check it against: the session privacy setting, everything under MUST ALWAYS RESPECT, the toys he actually has, the time left, and what he is likely doing right now. If it breaks any of them, don't give it; pick something that fits. Make every task make sense: clear, specific, physically doable where he is, with exactly what to do, for how long and how you'll check it. Picture him actually doing it step by step first. If you are unsure whether something is possible for him, ask one quick question instead of guessing.\n- If Tim says a task isn't possible or doesn't make sense, accept it straight away without arguing, briefly own it, give him a workable alternative, and add a [NOTE: ...] saying what he can't do and why, so it never happens again.\n- Learning: after END feedback (best / less / next), or whenever you learn something worth keeping, add 1 to 3 short factual notes as [NOTE: ...]. The page hides and saves them and gives them back to you every session.";
+const CURRENT_FACTS="\n\nCURRENT FACTS (these override anything older above):\n- This chat runs in Tim's own app, which exists only for your sessions: you are ALWAYS in character here. KINK is not needed in this app (if he types it anyway, just play along).\n- A session starts when Tim taps Start in the app; it then sends you his privacy, time, arousal, direction and chosen toys (see session settings below). Never ask him for his privacy, time or arousal; you already have them. Open the session yourself in character and lead the conversation, but don't give him actual tasks or toy instructions until he asks for one (e.g. 'give me a task'). Ask about wishes only if it adds something.\n- VOIDLOCK is now a persistent lockout: it stops all toys and blocks commands until Tim resets it himself. If he types VOIDLOCK the app triggers it automatically.\n- Tim removed the old intensity, duration and three-stage limits on toy commands; ignore them. Toys can only be controlled through the tags explained below, and only toys marked connected.\n- The key safe is ordered but not connected. E-stim is not connected.\n- Never give advice on medication doses or timing. If he says his medication feels too strong, suggest he speaks to his doctor.\n- Quick commands KINK, MORE, EASY, SKIP, STATUS, END and VOIDLOCK work as in his instructions. On END, include [STOP] if toys may still be running.\n- Timers: to give him a visible countdown, add [TIMER 120 plank] (seconds, then an optional short label). He sees it ticking, and when it ends the app tells you automatically so you can carry on without him having to message. Use timers for holds, edging windows, exercise sets and waits. Don't announce the tag itself.\n- Feedback: the app has sliders for how much he liked something, his arousal, and whether he did the task. Only ask for feedback after he has finished a task you gave him (never after ordinary chat, and never twice in a row); between tasks just read how he's doing from what he writes. To ask, end your message with [CHECKIN] and the sliders pop up for him. He can also send feedback whenever he likes; it arrives as a message starting 'My feedback:'. Take it on board and respond in character; never talk in letter codes like L, A or F.\n- TASKS MUST BE POSSIBLE AND THOUGHT THROUGH. Before you give Tim any task, request or photo, silently check it against: the session privacy setting, everything under MUST ALWAYS RESPECT, the toys he actually has, the time left, and what he is likely doing right now. If it breaks any of them, don't give it; pick something that fits. Make every task make sense: clear, specific, physically doable where he is, with exactly what to do, for how long and how you'll check it. Picture him actually doing it step by step first. If you are unsure whether something is possible for him, ask one quick question instead of guessing.\n- If Tim says a task isn't possible or doesn't make sense, accept it straight away without arguing, briefly own it, give him a workable alternative, and add a [NOTE: ...] saying what he can't do and why, so it never happens again.\n- Learning: after END feedback (best / less / next), or whenever you learn something worth keeping, add 1 to 3 short factual notes as [NOTE: ...]. The page hides and saves them and gives them back to you every session.";
 function memPrompt(){let t='';
   if(adaMem.trim())t+='\n\nABOUT TIM AND HOW YOUR SESSIONS WORK (his saved instructions and memory):\n'+adaMem.trim();
   if(notes.length)t+='\n\nYOUR NOTES FROM PAST SESSIONS (oldest first):\n'+notes.map(n=>'- '+n.d+': '+n.t).join('\n');
@@ -678,6 +701,7 @@ function memPrompt(){let t='';
 const MUST='Must always respect';
 const MEM_SECTIONS=[MUST,'Who he is','His life and routine','What turns him on','Limits, dislikes and boundaries','How sessions go best','Things he has told her','Their story so far'];
 let mem=store.get('mem',{n:0,f:[]});if(!mem||!Array.isArray(mem.f))mem={n:0,f:[]};if(!Array.isArray(mem.gone))mem.gone=[];
+mem.f=mem.f.filter(x=>{if(/^Nipple clamps: build in breaks/i.test(x.t)){const k=x.t.toLowerCase();if(!mem.gone.includes(k))mem.gone.push(k);return false}return true});
 function forget(t){const k=String(t).toLowerCase();if(!mem.gone.includes(k))mem.gone.push(k);mem.gone=mem.gone.slice(-3000)}
 function unforget(t){const k=String(t).toLowerCase();mem.gone=mem.gone.filter(x=>x!==k)}
 function saveMem(noSync){store.set('mem',mem);renderMem();if(!noSync)syncSoon()}
@@ -821,6 +845,7 @@ function handleReply(t,reply){
   if(m){const mins=(!m[1]||m[1].toLowerCase()==='now')?0:Math.min(120,parseInt(m[1],10));setCheck(Date.now()+mins*60000,(m[2]||'front').toLowerCase())}
   if(settings.onReply)next();
   runToyTags(reply);
+  scheduleTags(reply);
   saveNotes(reply);
   setTimeout(()=>catchUp(false),1500);
 }
@@ -904,7 +929,7 @@ $('persona').value=persona;
 $('persona').oninput=e=>{persona=e.target.value;store.set('persona',persona)};
 let rpArmed=false;$('resetPersona').onclick=()=>{if(!rpArmed){rpArmed=true;$('resetPersona').textContent='Tap again to replace with basic';setTimeout(()=>{rpArmed=false;$('resetPersona').textContent='Reset to basic'},3000);return}rpArmed=false;$('resetPersona').textContent='Reset to basic';persona=DEFAULT_PERSONA;$('persona').value=persona;store.set('persona',persona);toast('Basic character restored')};
 $('newChat').onclick=()=>{$('sheet').hidden=true;openSess(true)};
-$('void').onclick=async()=>{if(check)clearCheck();note('VOIDLOCK sent…');
+$('void').onclick=async()=>{if(check)clearCheck();clearLater();note('VOIDLOCK sent…');
   const r=await toyCall({action:'VOIDLOCK'});const ok=toyOk(r)||(r&&r.lock_write_confirmed);
   logToy('VOIDLOCK used: everything stopped and locked');locked=true;store.set('locked',true);showLock();
   note(ok?'🔒 VOIDLOCK: toys stopped and locked. Tap Unlock when you\u2019re ready.':'⚠️ VOIDLOCK sent, but not confirmed ('+toyWhy(r)+'). Use the off buttons or Lovense Remote too.');
@@ -989,6 +1014,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 $('status').textContent=apiKey?(settings.name||'Vesper')+' · online':'Add your key in ☰';
 if(check)renderCheck();
 sessStatus();
+startLater();
 </script>
 </body>
 </html>
