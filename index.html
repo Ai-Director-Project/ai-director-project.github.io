@@ -672,7 +672,7 @@ function forget(t){const k=String(t).toLowerCase();if(!mem.gone.includes(k))mem.
 function unforget(t){const k=String(t).toLowerCase();mem.gone=mem.gone.filter(x=>x!==k)}
 function saveMem(noSync){store.set('mem',mem);renderMem();if(!noSync)syncSoon()}
 /* share memory between devices through the Cloudflare helper */
-const HELPER='https://home-helper.REPLACE.workers.dev';
+const HELPER='https://home-helper.timlangham73.workers.dev';
 let syncCode=store.get('syncCode','');let syncT=null;
 function syncOn(){return syncCode&&!HELPER.includes('REPLACE')}
 function syncSoon(){if(!syncOn())return;clearTimeout(syncT);syncT=setTimeout(syncMem,3000)}
