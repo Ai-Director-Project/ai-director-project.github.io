@@ -241,8 +241,13 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
         <p class="empty" style="margin-top:6px">Tap ✕ twice to make her forget something.</p>
       </details>
       <div id="syncBox" style="margin-top:12px">
-        <p class="empty">Share her memory with your other devices: type the same secret phrase on each one.</p>
-        <div class="row" style="margin-top:8px"><input id="syncIn" class="btn" type="password" autocomplete="off" placeholder="Secret phrase (8+ letters)" style="flex:1;min-width:0"><button class="btn primary" id="syncGo">Connect</button></div>
+        <p class="empty">Share her memory between your phone and tablet.</p>
+        <div class="row" style="margin-top:8px"><button class="btn primary" id="syncGo">Connect this device</button><button class="btn" id="syncAdd" hidden>Add another device</button></div>
+        <div id="pinBox" hidden style="margin-top:8px">
+          <p class="empty" id="pinMsg"></p>
+          <div class="row" id="pinEntry" style="margin-top:6px"><input id="pinIn" class="btn" inputmode="numeric" maxlength="6" placeholder="6 numbers" style="flex:1;min-width:0;font-size:20px;letter-spacing:4px"><button class="btn primary" id="pinGo">OK</button></div>
+          <p id="pinShow" hidden style="font-size:40px;letter-spacing:8px;text-align:center;margin:6px 0;font-weight:700"></p>
+        </div>
         <p class="empty" id="syncStat" style="margin-top:6px"></p>
       </div>
     </section>
@@ -743,12 +748,21 @@ async function feedMem(text){text=String(text||'').trim();if(!text)return;if(!ap
 renderMem();syncMem();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncMem()});
 $('memNow').onclick=()=>{if(!apiKey){toast('Add your Grok key in \u2630 first');return}if(netBusy){toast('Already working on it');return}if(!history.some(m=>!m.dg)){toast('Nothing new since last time');return}toast('Sifting your recent chat\u2026');catchUp(true)};
-function syncShow(){$('syncBox').hidden=HELPER.includes('REPLACE');$('syncStat').textContent=syncCode?'Connected. Her memory is shared.':'Not connected yet.';$('syncIn').value=syncCode}
+function syncShow(){$('syncBox').hidden=HELPER.includes('REPLACE');$('syncStat').textContent=syncCode?'Connected. Her memory is shared.':'Not connected yet.';$('syncGo').hidden=!!syncCode;$('syncAdd').hidden=!syncCode}
 syncShow();
-$('syncGo').onclick=async()=>{const c=$('syncIn').value.trim();if(c.length<8){toast('Use at least 8 letters');return}
-  try{const r=await fetch(HELPER+'/claim',{method:'POST',headers:{'X-Code':c}});
-    if(r.status===403){toast('That phrase doesn\u2019t match your other device');return}if(!r.ok)throw 0;
-    syncCode=c;store.set('syncCode',c);syncShow();await syncMem(true)}catch(e){toast('Couldn\u2019t reach the sharing helper')}};
+function newCode(){const a=new Uint8Array(18);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('')}
+async function useCode(c){syncCode=c;store.set('syncCode',c);$('pinBox').hidden=true;syncShow();await syncMem(true)}
+$('syncGo').onclick=async()=>{try{const p=await (await fetch(HELPER+'/ping')).json();
+    if(!p.claimed){const c=newCode();const r=await fetch(HELPER+'/claim',{method:'POST',headers:{'X-Code':c}});if(!r.ok)throw 0;await useCode(c);return}
+    $('pinBox').hidden=false;$('pinEntry').hidden=false;$('pinShow').hidden=true;$('pinMsg').textContent='On your other device, tap \u2630 \u2192 Add another device. Type the 6 numbers it shows here:';$('pinIn').value='';$('pinIn').focus()}
+  catch(e){toast('Couldn\u2019t reach the sharing helper')}};
+$('pinGo').onclick=async()=>{const pin=$('pinIn').value.replace(/\D/g,'');if(pin.length!==6){toast('Type all 6 numbers');return}
+  try{const r=await fetch(HELPER+'/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});
+    if(r.status===403){toast('Those numbers don\u2019t match. Try again.');return}if(r.status===410){toast('Those numbers ran out. Get new ones.');return}if(!r.ok)throw 0;
+    const j=await r.json();await useCode(j.code)}catch(e){toast('Couldn\u2019t reach the sharing helper')}};
+$('syncAdd').onclick=async()=>{try{const r=await fetch(HELPER+'/pair',{method:'POST',headers:{'X-Code':syncCode}});if(!r.ok)throw 0;const j=await r.json();
+    $('pinBox').hidden=false;$('pinEntry').hidden=true;$('pinShow').hidden=false;$('pinShow').textContent=j.pin;$('pinMsg').textContent='On your other device, tap \u2630 \u2192 Connect this device, then type these numbers (they work for 10 minutes):'}
+  catch(e){toast('Couldn\u2019t reach the sharing helper')}};
 $('memFeedGo').onclick=()=>feedMem($('memFeed').value);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')catchUp(false)});
 

@@ -28,7 +28,26 @@ export default {
       return reply({ ok: true });
     }
 
+    if (path === "/join" && req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      const pair = await env.STORE.get("pair", "json");
+      if (!pair || Date.now() > pair.exp) return reply({ error: "expired" }, 410);
+      if (String(body.pin || "") !== pair.pin) {
+        pair.tries = (pair.tries || 0) + 1;
+        if (pair.tries >= 5) await env.STORE.delete("pair"); else await env.STORE.put("pair", JSON.stringify(pair));
+        return reply({ error: "wrong numbers" }, 403);
+      }
+      await env.STORE.delete("pair");
+      return reply({ code: saved });
+    }
+
     if (!saved || sent !== saved) return reply({ error: "wrong code" }, 401);
+
+    if (path === "/pair" && req.method === "POST") {
+      const pin = String(100000 + Math.floor(Math.random() * 900000));
+      await env.STORE.put("pair", JSON.stringify({ pin, exp: Date.now() + 10 * 60000, tries: 0 }));
+      return reply({ pin });
+    }
 
     if (path === "/chat" && req.method === "GET") {
       const data = await env.STORE.get("chat", "json");
