@@ -457,10 +457,10 @@ const TOY_HOOK='https://hook.eu1.make.com/5ln4unqvf8sxitfag4kgwhrs1sapl82y';
 function lovKey(n){n=String(n).toLowerCase();return n.includes('gemini')?'GEMINI':n.includes('hush')?'HUSH':n.includes('tenera')?'TENERA':null}
 async function toyCall(f){
   try{const r=await fetch(TOY_HOOK,{method:'POST',body:new URLSearchParams(f)});const t=await r.text();
-    try{return JSON.parse(t)}catch(e){return {raw:t}}}
+    try{return JSON.parse(t)}catch(e){try{return JSON.parse(t.replace(/:\s*,/g,':null,').replace(/:\s*}/g,':null}'))}catch(e2){const c=t.match(/"code"\s*:\s*(\d+)/);return c?{code:+c[1],raw:t}:{raw:t}}}}
   catch(e){return {neterr:true}}
 }
-function toyOk(r){return r&&(r.success===true||r.success==='true'||r.code===200)}
+function toyOk(r){return !!r&&(r.success===true||r.success==='true'||+r.code===200)}
 function toyWhy(r){if(!r)return 'no answer';if(r.neterr)return 'couldn\u2019t reach Make';if(r.raw)return /accepted/i.test(r.raw)?'not run (locked by VOIDLOCK, or the toy is offline)':r.raw.slice(0,80);return r.message||r.error||('code '+r.code)}
 let toyLog=[];
 function logToy(t){toyLog.push(new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+' '+t);toyLog=toyLog.slice(-6)}
