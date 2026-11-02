@@ -104,6 +104,10 @@ input[type=range]{width:100%;accent-color:var(--rose)}
 select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px;font:inherit}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(140px + env(safe-area-inset-bottom,0px));z-index:20;background:#2b1520;border:1px solid var(--line);padding:10px 16px;border-radius:14px;font-size:14px;max-width:calc(100% - 32px);text-align:center}
 @media (prefers-reduced-motion:reduce){.photo{transition:none}}
+#sheet section>h3.fold{cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;padding:10px 0;margin:0}
+#sheet section>h3.fold::after{content:"\25B8";opacity:.6}
+#sheet section.open>h3.fold::after{content:"\25BE"}
+#sheet section.shut>:not(h3){display:none!important}
 </style>
 </head>
 <body>
@@ -156,6 +160,16 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <h2>Settings</h2>
       <button class="btn" id="closeSettings">Done</button>
     </div>
+
+    <section>
+      <h3>Back up &amp; restore</h3>
+      <div class="row">
+        <button class="btn primary" id="backupBtn">Back up</button>
+        <label class="btn" for="restoreFile">Restore</label>
+        <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+      </div>
+      <p class="empty" style="margin-top:6px">Saves your photos, chat, her memory, personality and settings in one file. Keep it in Google Drive. Your Grok key isn't included.</p>
+    </section>
 
     <section>
       <h3>Background</h3>
@@ -226,7 +240,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <h3>Her long-term memory</h3>
       <p class="empty" id="memStat">Nothing caught yet.</p>
       <p class="empty" style="margin-top:4px">While you chat she quietly catches the things worth keeping about you and lets the small stuff go. It builds into a big profile she reads every message.</p>
-      <div class="row" style="margin-top:8px"><button class="btn primary" id="memNow">Catch now</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn primary" id="memNow">Catch now</button><button class="btn" id="memCopy">Copy all for Claude</button></div>
       <details style="margin-top:10px">
         <summary class="btn" style="list-style:none;display:block">Feed her old chats ▾</summary>
         <div style="margin-top:10px">
@@ -263,15 +277,6 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <input id="nameInput" class="btn" style="width:100%;box-sizing:border-box" maxlength="30">
     </section>
 
-    <section>
-      <h3>Back up &amp; restore</h3>
-      <div class="row">
-        <button class="btn primary" id="backupBtn">Back up</button>
-        <label class="btn" for="restoreFile">Restore</label>
-        <input type="file" id="restoreFile" accept=".json,application/json" hidden>
-      </div>
-      <p class="empty" style="margin-top:6px">Saves your photos, chat, her memory, personality and settings in one file. Keep it in Google Drive. Your Grok key isn't included.</p>
-    </section>
 
     <section>
       <details id="lib">
@@ -763,6 +768,11 @@ $('pinGo').onclick=async()=>{const pin=$('pinIn').value.replace(/\D/g,'');if(pin
 $('syncAdd').onclick=async()=>{try{const r=await fetch(HELPER+'/pair',{method:'POST',headers:{'X-Code':syncCode}});if(!r.ok)throw 0;const j=await r.json();
     $('pinBox').hidden=false;$('pinEntry').hidden=true;$('pinShow').hidden=false;$('pinShow').textContent=j.pin;$('pinMsg').textContent='On your other device, tap \u2630 \u2192 Connect this device, then type these numbers (they work for 10 minutes):'}
   catch(e){toast('Couldn\u2019t reach the sharing helper')}};
+document.querySelectorAll('#sheet section').forEach(sec=>{const h=sec.querySelector(':scope>h3');if(!h||/Back up/.test(h.textContent))return;
+  h.classList.add('fold');sec.classList.add('shut');h.onclick=()=>{sec.classList.toggle('shut');sec.classList.toggle('open')}});
+function memDump(){let t='AFTER DARK MEMORY EXPORT\n\n=== WHAT SHE KNOWS ABOUT YOU (personal profile) ===\n'+(adaMem.trim()||'(empty)')+'\n\n=== HER NOTES FROM PAST SESSIONS ===\n'+(notes.map(n=>'- '+n.d+': '+n.t).join('\n')||'(none)')+'\n\n=== LONG-TERM MEMORY ===';
+  MEM_SECTIONS.forEach(sec=>{const L=mem.f.filter(x=>x.s===sec);if(L.length)t+='\n['+sec+']\n'+L.map(x=>'- '+x.t).join('\n')});return t}
+$('memCopy').onclick=async()=>{const t=memDump();try{await navigator.clipboard.writeText(t);toast('Copied. Paste it into Claude.')}catch(e){$('memFeed').value=t;toast('Couldn\u2019t copy. It\u2019s in the Feed box: select all and copy')}};
 $('memFeedGo').onclick=()=>feedMem($('memFeed').value);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')catchUp(false)});
 
@@ -948,6 +958,11 @@ $('restoreFile').addEventListener('change',async e=>{
   if(data.settings){settings=Object.assign(settings,data.settings);['onReply','onOpen','onTimer','minutes','shuffle','dim','blur','name','photosOn','bubbleA','solo'].forEach(k=>store.set(k,settings[k]))}
   if(data.play&&typeof data.play==='object'){play=data.play;playExtra=Array.isArray(data.playExtra)?data.playExtra:[];savePlay()}
   if(typeof data.profile==='string'){adaMem=data.profile;store.set('profile',adaMem);$('adaMem').value=adaMem}
+  if(data.kind==='cleanup'){
+    if(typeof data.profile==='string'){adaMem=data.profile;store.set('profile',adaMem);$('adaMem').value=adaMem}
+    if(Array.isArray(data.notes)){notes=data.notes;store.set('notes',notes);renderNotes()}
+    if(data.mem&&Array.isArray(data.mem.f)){const keep=new Set(data.mem.f.map(x=>x.t.toLowerCase()));mem.f.forEach(x=>{if(!keep.has(x.t.toLowerCase()))forget(x.t)});data.mem.f.forEach(x=>unforget(x.t));mem.f=data.mem.f;saveMem()}
+    toast('Tidied memory loaded');return}
   if(data.mem&&Array.isArray(data.mem.f)){if(data.kind==='profile'&&mem.f.length){data.mem.f.forEach(x=>{if(!mem.f.some(y=>y.t===x.t))mem.f.push(x)})}else mem=data.mem;saveMem()}
   if(Array.isArray(data.notes)&&(data.kind!=='profile'||!notes.length)){notes=data.notes;store.set('notes',notes);renderNotes()}
   if(Array.isArray(data.toys)){if(data.kind==='profile'){data.toys.forEach(t=>{if(!toys.some(x=>x.n.toLowerCase()===t.n.toLowerCase()))toys.push(t)});saveToys()}else{toys=data.toys;saveToys()}}if(data.sess){sess=data.sess;store.set('sess',sess)}
