@@ -240,7 +240,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <h3>Her long-term memory</h3>
       <p class="empty" id="memStat">Nothing caught yet.</p>
       <p class="empty" style="margin-top:4px">While you chat she quietly catches the things worth keeping about you and lets the small stuff go. It builds into a big profile she reads every message.</p>
-      <div class="row" style="margin-top:8px"><button class="btn primary" id="memNow">Catch now</button><button class="btn" id="memCopy">Copy all for Claude</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn primary" id="memNow">Catch now</button><button class="btn" id="memCopy">Copy all for Claude</button><button class="btn" id="chatCopy">Copy chat for Claude</button></div>
       <details style="margin-top:10px">
         <summary class="btn" style="list-style:none;display:block">Feed her old chats ▾</summary>
         <div style="margin-top:10px">
@@ -811,6 +811,8 @@ async function tidyLink(){const m=location.hash.match(/^#tidy=([A-Za-z0-9_-]+)$/
     const txt=await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
     const d=JSON.parse(txt);if(d&&d.app==='afterdark'&&d.kind==='cleanup')applyCleanup(d)}catch(e){toast('That link didn\u2019t load. Ask Claude for a new one.')}}
 tidyLink();window.addEventListener('hashchange',tidyLink);
+$('chatCopy').onclick=async()=>{const t='AFTER DARK CHAT EXPORT ('+new Date().toLocaleString()+')\nToy results: '+(toyLog.join('; ')||'none')+'\nLocked: '+locked+'\n\n'+history.map(m=>(m.hide?'[APP] ':m.who==='me'?'TIM: ':'VESPER: ')+m.text).join('\n\n');
+  try{await navigator.clipboard.writeText(t);toast('Chat copied. Paste it into Claude.')}catch(e){$('memFeed').value=t;toast('Couldn\u2019t copy. It\u2019s in the Feed box: select all and copy')}};
 $('memCopy').onclick=async()=>{const t=memDump();try{await navigator.clipboard.writeText(t);toast('Copied. Paste it into Claude.')}catch(e){$('memFeed').value=t;toast('Couldn\u2019t copy. It\u2019s in the Feed box: select all and copy')}};
 $('memFeedGo').onclick=()=>feedMem($('memFeed').value);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')catchUp(false)});
