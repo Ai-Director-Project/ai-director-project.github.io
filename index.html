@@ -222,6 +222,26 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     </section>
 
     <section>
+      <h3>Her long-term memory</h3>
+      <p class="empty" id="memStat">Nothing caught yet.</p>
+      <p class="empty" style="margin-top:4px">While you chat she quietly catches the things worth keeping about you and lets the small stuff go. It builds into a big profile she reads every message.</p>
+      <div class="row" style="margin-top:8px"><button class="btn primary" id="memNow">Catch now</button></div>
+      <details style="margin-top:10px">
+        <summary class="btn" style="list-style:none;display:block">Feed her old chats ▾</summary>
+        <div style="margin-top:10px">
+          <p class="empty">Paste anything you told her before (old Grok chats, her old memory, notes). Any length. She keeps the important bits, not every word.</p>
+          <textarea id="memFeed" rows="5" class="btn" placeholder="Paste here" style="width:100%;box-sizing:border-box;resize:vertical;font-size:14px;line-height:1.45;margin-top:8px"></textarea>
+          <div class="row" style="margin-top:8px"><button class="btn primary" id="memFeedGo">Let her read it</button></div>
+        </div>
+      </details>
+      <details style="margin-top:10px">
+        <summary class="btn" style="list-style:none;display:block">See what she remembers ▾</summary>
+        <div id="memList" class="choice" style="margin-top:10px"></div>
+        <p class="empty" style="margin-top:6px">Tap ✕ twice to make her forget something.</p>
+      </details>
+    </section>
+
+    <section>
       <h3>Her notes from past sessions</h3>
       <div id="notesList" class="choice"></div>
       <p class="empty" style="margin-top:6px">She adds these herself after sessions. Tap ✕ twice to delete one.</p>
@@ -239,7 +259,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
         <label class="btn" for="restoreFile">Restore</label>
         <input type="file" id="restoreFile" accept=".json,application/json" hidden>
       </div>
-      <p class="empty" style="margin-top:6px">Saves your photos, chat, personality and settings in one file. Keep it in Google Drive. Your Grok key isn't included.</p>
+      <p class="empty" style="margin-top:6px">Saves your photos, chat, her memory, personality and settings in one file. Keep it in Google Drive. Your Grok key isn't included.</p>
     </section>
 
     <section>
@@ -414,7 +434,7 @@ chat.addEventListener('click',wake);$('input').addEventListener('focus',wake);
 const TAG=/\[PHOTO(?:\s+(now|\d{1,3}))?(?:\s*(?:min|mins|minutes)?)?(?:\s+(front|back))?\s*\]/i;
 function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
 history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'));
-function saveHistory(){history=history.slice(-60);store.set('history',history)}
+function saveHistory(){const cut=history.length-60;if(cut>0){const lost=history.slice(0,cut);if(lost.some(m=>!m.dg)&&typeof catchUp==='function')catchUp(true,lost)}history=history.slice(-60);store.set('history',history)}
 const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, 0 to 120, then front or back camera). Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a check comes due he only has a short window to take the photo; if he misses it the page will tell you. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
 /* toy bridge (Make) */
 const TOY_HOOK='https://hook.eu1.make.com/5ln4unqvf8sxitfag4kgwhrs1sapl82y';
@@ -610,7 +630,7 @@ $('sessBtn').onclick=()=>openSess(false);
 $('sessClose').onclick=()=>{sess=store.get('sess',sess);$('sess').hidden=true};
 $('sess').addEventListener('click',e=>{if(e.target.id==='sess'){sess=store.get('sess',sess);$('sess').hidden=true}});
 $('sessUpdate').onclick=()=>{sess.start=sess.start||Date.now();applySess();$('sess').hidden=true;note('Session updated: '+MOODS[sess.mood-1]+' · '+(STYLES.find(x=>x[0]===sess.style)||STYLES[0])[1]+' · '+lenLabel(sess.len));toast('She knows the new settings')};
-$('sessStart').onclick=()=>{sess.start=0;applySess();history=[];saveHistory();chat.innerHTML='';checkCard=null;clearCheck();
+$('sessStart').onclick=()=>{sess.start=0;applySess();{const old=history;if(old.some(m=>!m.dg))catchUp(true,old)}history=[];saveHistory();chat.innerHTML='';checkCard=null;clearCheck();
   note('New session: '+MOODS[sess.mood-1]+' · '+(STYLES.find(x=>x[0]===sess.style)||STYLES[0])[1]+' · '+lenLabel(sess.len));$('sess').hidden=true;$('sheet').hidden=true;
   kickoff()};
 async function kickoff(){if(!apiKey||busy)return;busy=true;
@@ -636,7 +656,70 @@ const CURRENT_FACTS="\n\nCURRENT FACTS (these override anything older above):\n-
 function memPrompt(){let t='';
   if(adaMem.trim())t+='\n\nABOUT TIM AND HOW YOUR SESSIONS WORK (his saved instructions and memory):\n'+adaMem.trim();
   if(notes.length)t+='\n\nYOUR NOTES FROM PAST SESSIONS (oldest first):\n'+notes.map(n=>'- '+n.d+': '+n.t).join('\n');
-  return t+CURRENT_FACTS}
+  return t+memText()+CURRENT_FACTS}
+
+/* long-term memory: the net */
+const MEM_SECTIONS=['Who he is','His life and routine','What turns him on','Limits, dislikes and boundaries','How sessions go best','Things he has told her','Their story so far'];
+let mem=store.get('mem',{n:0,f:[]});if(!mem||!Array.isArray(mem.f))mem={n:0,f:[]};
+function saveMem(){store.set('mem',mem);renderMem()}
+function memSize(){return mem.f.reduce((a,x)=>a+x.t.length+4,0)}
+function memText(){if(!mem.f.length)return '';
+  let t='\n\nYOUR LONG-TERM MEMORY OF TIM (built up from everything he has told you over time; it is true unless he corrects it. Use it naturally and let it shape what you do; don\u2019t recite it back to him):';
+  MEM_SECTIONS.forEach(sec=>{const L=mem.f.filter(x=>x.s===sec);if(L.length)t+='\n'+sec.toUpperCase()+':\n'+L.map(x=>'- '+x.t).join('\n')});
+  return t}
+function renderMem(){const k=Math.round(memSize()/1000);
+  $('memStat').textContent=mem.f.length?mem.f.length+' things remembered (about '+(k<1?'1':k)+' thousand characters).':'Nothing caught yet.';
+  const L=$('memList');if(!L)return;L.innerHTML='';
+  MEM_SECTIONS.forEach(sec=>{const items=mem.f.filter(x=>x.s===sec);if(!items.length)return;
+    const h=document.createElement('p');h.className='empty';h.style.cssText='margin:8px 0 2px;font-weight:600';h.textContent=sec;L.appendChild(h);
+    items.forEach(x=>{const d=document.createElement('div');d.className='toy';d.innerHTML='<span style="flex:1;font-size:14px"></span><button class="x" aria-label="Forget">\u2715</button>';
+      d.querySelector('span').textContent=x.t;d.querySelector('.x').onclick=()=>{if(confirmRemove(d)){mem.f=mem.f.filter(y=>y!==x);saveMem()}};L.appendChild(d)})})}
+const NET_RULES="You are the memory keeper for Vesper, an AI companion who talks with Tim in his private adult chat app. You read a stretch of conversation (or text Tim pasted in) and update Vesper's long-term memory of Tim. Think of a net drifting through the sea: catch every titbit worth keeping, let the small stuff go.\n\nKEEP: facts about Tim and his life, people and pets he mentions, his work and routine, his body and health as he describes it, his tastes, desires, fantasies and kinks, what excites him and what doesn't, limits and boundaries, how he likes sessions run, his reactions and feedback, promises, plans, running jokes, nicknames, rules and rituals between them, and memorable moments. Be specific and concrete; keep his own words for anything that matters.\nDROP: greetings, filler, one-off logistics, the play-by-play of a session, app or tag messages, and anything already in memory.\nCorrect memory when Tim says something has changed, and merge near-duplicates.\nEach fact is one short line written about Tim in the third person (for example: 'Loves being teased slowly; said the long build-ups are the best part').\n\nReply ONLY with JSON in this exact shape:\n{\"add\":[{\"s\":\"<section>\",\"t\":\"<fact>\"}],\"change\":[{\"id\":<number>,\"t\":\"<new wording>\"}],\"remove\":[<number>]}\nSections (use exactly one of these names): "+MEM_SECTIONS.join(' | ')+".\nIf nothing is worth keeping, reply {\"add\":[],\"change\":[],\"remove\":[]}.";
+function memNumbered(){return mem.f.length?mem.f.map((x,i)=>i+' ['+x.s+'] '+x.t).join('\n'):'(empty)'}
+let netBusy=false;
+async function netCall(sys,user){
+  const r=await fetch('https://api.x.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+    body:JSON.stringify({model:MODEL,temperature:0.2,max_tokens:2500,messages:[{role:'system',content:sys},{role:'user',content:user}]})});
+  if(!r.ok)throw new Error('net '+r.status);
+  const j=await r.json();const c=(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||'';
+  const a=c.indexOf('{'),b=c.lastIndexOf('}');if(a<0||b<a)throw new Error('no json');return JSON.parse(c.slice(a,b+1))}
+function applyNet(o){if(!o)return 0;const day=new Date().toLocaleDateString('en-CA');const old=mem.f.slice();let n=0;
+  (Array.isArray(o.change)?o.change:[]).forEach(c=>{const x=old[+c.id];if(x&&c.t&&String(c.t).trim()){x.t=String(c.t).trim().slice(0,400);x.d=day;n++}});
+  const rm=new Set((Array.isArray(o.remove)?o.remove:[]).map(Number).filter(i=>old[i]).map(i=>old[i]));
+  mem.f=mem.f.filter(x=>!rm.has(x));n+=rm.size;
+  (Array.isArray(o.add)?o.add:[]).forEach(a=>{const t=String(a&&a.t||'').trim().slice(0,400);if(t.length<3)return;
+    if(mem.f.some(x=>x.t.toLowerCase()===t.toLowerCase()))return;
+    const s=MEM_SECTIONS.includes(a.s)?a.s:'Things he has told her';mem.f.push({s,t,d:day});n++});
+  saveMem();return n}
+async function netRun(text){
+  const o=await netCall(NET_RULES,'CURRENT MEMORY (numbered):\n'+memNumbered()+'\n\nNEW MATERIAL TO SIFT:\n'+text);
+  const n=applyNet(o);if(memSize()>60000)await netTidy();return n}
+async function netTidy(){/* when memory gets very big, merge overlaps section by section */
+  for(const sec of MEM_SECTIONS){const L=mem.f.filter(x=>x.s===sec);if(L.length<25)continue;
+    try{const o=await netCall("You tidy one section of an AI companion's long-term memory about Tim. Merge duplicates and near-duplicates into single richer lines, drop anything trivial or outdated, and keep every distinct detail that matters. Reply ONLY with JSON: {\"lines\":[\"...\"]}",
+      sec+':\n'+L.map(x=>'- '+x.t).join('\n'));
+      if(Array.isArray(o.lines)&&o.lines.length>=Math.min(5,L.length/4)){const day=new Date().toLocaleDateString('en-CA');
+        mem.f=mem.f.filter(x=>x.s!==sec).concat(o.lines.map(t=>String(t).trim()).filter(t=>t.length>2).map(t=>({s:sec,t:t.slice(0,400),d:day})));saveMem()}}catch(e){}}}
+function convoText(list){return list.map(m=>(m.hide?'[app] ':m.who==='me'?'Tim: ':'Vesper: ')+clean(m.text)).join('\n')}
+async function catchUp(force,list){if(!apiKey)return;if(list){for(let i=0;netBusy&&i<60;i++)await new Promise(r=>setTimeout(r,1000))}if(netBusy)return;
+  const src=list||history;const fresh=src.filter(m=>!m.dg);
+  if(!fresh.length||(!force&&fresh.length<12))return;
+  netBusy=true;try{const n=await netRun(convoText(fresh));fresh.forEach(m=>m.dg=1);if(!list)saveHistory();mem.n++;saveMem();
+    if(force&&!list)toast(n?'She caught '+n+' new thing'+(n>1?'s':''):'Nothing new worth keeping')}
+  catch(e){if(force&&!list)toast('Couldn\u2019t update her memory just now. Try again.')}netBusy=false}
+async function feedMem(text){text=String(text||'').trim();if(!text)return;if(!apiKey){toast('Add your Grok key in \u2630 first');return}
+  if(netBusy){toast('She\u2019s busy remembering. Try again in a moment.');return}
+  const parts=[];for(let i=0;i<text.length;i+=12000)parts.push(text.slice(i,i+12000));
+  netBusy=true;let total=0,failed=0;const btn=$('memFeedGo');btn.disabled=true;
+  for(let i=0;i<parts.length;i++){btn.textContent='Reading '+(i+1)+' of '+parts.length+'\u2026';
+    try{total+=await netRun('(Text Tim pasted in from earlier chats and notes.)\n'+parts[i])}catch(e){failed++}}
+  btn.disabled=false;btn.textContent='Let her read it';netBusy=false;mem.n++;saveMem();
+  if(!failed)$('memFeed').value='';
+  toast(failed?'Read '+(parts.length-failed)+' of '+parts.length+' parts. Tap again to retry.':'Done. She caught '+total+' thing'+(total===1?'':'s'))}
+renderMem();
+$('memNow').onclick=()=>{if(!apiKey){toast('Add your Grok key in \u2630 first');return}if(netBusy){toast('Already working on it');return}if(!history.some(m=>!m.dg)){toast('Nothing new since last time');return}toast('Sifting your recent chat\u2026');catchUp(true)};
+$('memFeedGo').onclick=()=>feedMem($('memFeed').value);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')catchUp(false)});
 
 async function askGrok(extra){
   const msgs=[{role:'system',content:(persona||DEFAULT_PERSONA)+memPrompt()+PHOTO_RULES+sessPrompt()}].concat(history.slice(-KEEP).map(m=>({role:m.who==='me'?'user':'assistant',content:m.text})));
@@ -669,6 +752,7 @@ function handleReply(t,reply){
   if(settings.onReply)next();
   runToyTags(reply);
   saveNotes(reply);
+  setTimeout(()=>catchUp(false),1500);
 }
 async function send(){
   const v=$('input').value.trim(); if(!v||busy)return;
@@ -801,7 +885,7 @@ async function dataToBlob(d){const r=await fetch(d);return r.blob()}
 $('backupBtn').onclick=async()=>{
   toast('Making backup…');
   const pics=[];for(const p of photos){const d=await blobToData(p.blob);if(d)pics.push(d)}
-  const data={app:'afterdark',version:1,saved:new Date().toISOString(),settings,persona,history,toys,sess,profile:adaMem,notes,play,playExtra,photos:pics};
+  const data={app:'afterdark',version:1,saved:new Date().toISOString(),settings,persona,history,toys,sess,profile:adaMem,notes,mem,play,playExtra,photos:pics};
   const now=new Date(),day=now.toLocaleDateString('en-CA')+'-'+String(now.getHours()).padStart(2,'0')+String(now.getMinutes()).padStart(2,'0');
   const file=new File([JSON.stringify(data)],'after-dark-backup-'+day+'.json',{type:'application/json'});
   try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});toast('Backup ready');return}}catch(e){if(e&&e.name==='AbortError'){toast('Backup cancelled');return}}
@@ -817,6 +901,7 @@ $('restoreFile').addEventListener('change',async e=>{
   if(data.settings){settings=Object.assign(settings,data.settings);['onReply','onOpen','onTimer','minutes','shuffle','dim','blur','name','photosOn','bubbleA','solo'].forEach(k=>store.set(k,settings[k]))}
   if(data.play&&typeof data.play==='object'){play=data.play;playExtra=Array.isArray(data.playExtra)?data.playExtra:[];savePlay()}
   if(typeof data.profile==='string'){adaMem=data.profile;store.set('profile',adaMem);$('adaMem').value=adaMem}
+  if(data.mem&&Array.isArray(data.mem.f)){if(data.kind==='profile'&&mem.f.length){data.mem.f.forEach(x=>{if(!mem.f.some(y=>y.t===x.t))mem.f.push(x)})}else mem=data.mem;saveMem()}
   if(Array.isArray(data.notes)&&(data.kind!=='profile'||!notes.length)){notes=data.notes;store.set('notes',notes);renderNotes()}
   if(Array.isArray(data.toys)){if(data.kind==='profile'){data.toys.forEach(t=>{if(!toys.some(x=>x.n.toLowerCase()===t.n.toLowerCase()))toys.push(t)});saveToys()}else{toys=data.toys;saveToys()}}if(data.sess){sess=data.sess;store.set('sess',sess)}
   if(typeof data.persona==='string'){persona=data.persona;store.set('persona',persona);$('persona').value=persona}
