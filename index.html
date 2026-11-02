@@ -663,11 +663,11 @@ function sessStatus(){clearInterval(sessTick);const upd=()=>{if(check)return;con
 let adaMem=store.get('profile','');let notes=store.get('notes',[]);
 function renderNotes(){const L=$('notesList');L.innerHTML='';if(!notes.length){L.innerHTML='<p class="empty">No notes yet.</p>';return}
   notes.slice().reverse().forEach(n=>{const d=document.createElement('div');d.className='toy';d.innerHTML='<span style="flex:1;font-size:14px"></span><button class="x" aria-label="Delete">✕</button>';
-    d.querySelector('span').textContent=n.d+': '+n.t;d.querySelector('.x').onclick=()=>{if(confirmRemove(d)){notes.splice(notes.indexOf(n),1);store.set('notes',notes);renderNotes()}};L.appendChild(d)})}
-$('adaMem').value=adaMem;$('adaMem').oninput=e=>{adaMem=e.target.value;store.set('profile',adaMem)};
+    d.querySelector('span').textContent=n.d+': '+n.t;d.querySelector('.x').onclick=()=>{if(confirmRemove(d)){notes.splice(notes.indexOf(n),1);(store.set('notes',notes),store.set('notesAt',Date.now()),syncSoon());renderNotes()}};L.appendChild(d)})}
+$('adaMem').value=adaMem;$('adaMem').oninput=e=>{adaMem=e.target.value;(store.set('profile',adaMem),store.set('profileAt',Date.now()),syncSoon())};
 renderNotes();
 function saveNotes(reply){const found=[...String(reply).matchAll(/\[NOTE:\s*([^\]]{3,400})\]/gi)].map(m=>m[1].trim());if(!found.length)return;
-  const d=new Date().toLocaleDateString('en-CA');found.slice(0,3).forEach(t=>notes.push({d,t}));notes=notes.slice(-60);store.set('notes',notes);renderNotes();note('📝 '+(settings.name||'Vesper')+' saved '+found.length+' note'+(found.length>1?'s':''))}
+  const d=new Date().toLocaleDateString('en-CA');found.slice(0,3).forEach(t=>notes.push({d,t}));notes=notes.slice(-60);(store.set('notes',notes),store.set('notesAt',Date.now()),syncSoon());renderNotes();note('📝 '+(settings.name||'Vesper')+' saved '+found.length+' note'+(found.length>1?'s':''))}
 const CURRENT_FACTS="\n\nCURRENT FACTS (these override anything older above):\n- This chat runs in Tim's own app, which exists only for your sessions: you are ALWAYS in character here. KINK is not needed in this app (if he types it anyway, just play along).\n- A session starts when Tim taps Start in the app; it then sends you his privacy, time, arousal, direction and chosen toys (see session settings below). Never ask him for his privacy, time or arousal; you already have them. Open the session yourself in character and lead the conversation, but don't give him actual tasks or toy instructions until he asks for one (e.g. 'give me a task'). Ask about wishes only if it adds something.\n- VOIDLOCK is now a persistent lockout: it stops all toys and blocks commands until Tim resets it himself. If he types VOIDLOCK the app triggers it automatically.\n- Tim removed the old intensity, duration and three-stage limits on toy commands; ignore them. Toys can only be controlled through the tags explained below, and only toys marked connected.\n- The key safe is ordered but not connected. E-stim is not connected.\n- Never give advice on medication doses or timing. If he says his medication feels too strong, suggest he speaks to his doctor.\n- With nipple clamps, build in regular breaks and have him check for numbness or colour change.\n- Quick commands KINK, MORE, EASY, SKIP, STATUS, END and VOIDLOCK work as in his instructions. On END, include [STOP] if toys may still be running.\n- Feedback: the app has sliders for how much he liked something, his arousal, and whether he did the task. Only ask for feedback after he has finished a task you gave him (never after ordinary chat, and never twice in a row); between tasks just read how he's doing from what he writes. To ask, end your message with [CHECKIN] and the sliders pop up for him. He can also send feedback whenever he likes; it arrives as a message starting 'My feedback:'. Take it on board and respond in character; never talk in letter codes like L, A or F.\n- TASKS MUST BE POSSIBLE AND THOUGHT THROUGH. Before you give Tim any task, request or photo, silently check it against: the session privacy setting, everything under MUST ALWAYS RESPECT, the toys he actually has, the time left, and what he is likely doing right now. If it breaks any of them, don't give it; pick something that fits. Make every task make sense: clear, specific, physically doable where he is, with exactly what to do, for how long and how you'll check it. Picture him actually doing it step by step first. If you are unsure whether something is possible for him, ask one quick question instead of guessing.\n- If Tim says a task isn't possible or doesn't make sense, accept it straight away without arguing, briefly own it, give him a workable alternative, and add a [NOTE: ...] saying what he can't do and why, so it never happens again.\n- Learning: after END feedback (best / less / next), or whenever you learn something worth keeping, add 1 to 3 short factual notes as [NOTE: ...]. The page hides and saves them and gives them back to you every session.";
 function memPrompt(){let t='';
   if(adaMem.trim())t+='\n\nABOUT TIM AND HOW YOUR SESSIONS WORK (his saved instructions and memory):\n'+adaMem.trim();
@@ -692,7 +692,9 @@ async function syncMem(manual){if(!syncOn())return false;
   try{const h={'Content-Type':'application/json','X-Code':syncCode};
     const r=await fetch(HELPER+'/mem',{headers:h});if(!r.ok)throw 0;const remote=await r.json();
     mem=mergeMem(mem,remote&&Array.isArray(remote.f)?remote:{f:[]});saveMem(true);
-    const w=await fetch(HELPER+'/mem',{method:'PUT',headers:h,body:JSON.stringify({n:mem.n,f:mem.f,gone:mem.gone})});if(!w.ok)throw 0;
+    if(remote&&typeof remote.p==='string'&&(remote.pu||0)>store.get('profileAt',0)){adaMem=remote.p;store.set('profile',adaMem);store.set('profileAt',remote.pu);$('adaMem').value=adaMem}
+    if(remote&&Array.isArray(remote.notes)&&(remote.nu||0)>store.get('notesAt',0)){notes=remote.notes;store.set('notes',notes);store.set('notesAt',remote.nu);renderNotes()}
+    const w=await fetch(HELPER+'/mem',{method:'PUT',headers:h,body:JSON.stringify({n:mem.n,f:mem.f,gone:mem.gone,p:adaMem,pu:store.get('profileAt',0),notes,nu:store.get('notesAt',0)})});if(!w.ok)throw 0;
     if(manual)toast('Memory shared with your other devices');return true}
   catch(e){if(manual)toast('Couldn\u2019t reach the sharing helper');return false}}
 function memSize(){return mem.f.reduce((a,x)=>a+x.t.length+4,0)}
@@ -772,6 +774,17 @@ document.querySelectorAll('#sheet section').forEach(sec=>{const h=sec.querySelec
   h.classList.add('fold');sec.classList.add('shut');h.onclick=()=>{sec.classList.toggle('shut');sec.classList.toggle('open')}});
 function memDump(){let t='AFTER DARK MEMORY EXPORT\n\n=== WHAT SHE KNOWS ABOUT YOU (personal profile) ===\n'+(adaMem.trim()||'(empty)')+'\n\n=== HER NOTES FROM PAST SESSIONS ===\n'+(notes.map(n=>'- '+n.d+': '+n.t).join('\n')||'(none)')+'\n\n=== LONG-TERM MEMORY ===';
   MEM_SECTIONS.forEach(sec=>{const L=mem.f.filter(x=>x.s===sec);if(L.length)t+='\n['+sec+']\n'+L.map(x=>'- '+x.t).join('\n')});return t}
+function applyCleanup(data){
+  if(typeof data.profile==='string'){adaMem=data.profile;(store.set('profile',adaMem),store.set('profileAt',Date.now()),syncSoon());$('adaMem').value=adaMem}
+  if(Array.isArray(data.notes)){notes=data.notes;(store.set('notes',notes),store.set('notesAt',Date.now()),syncSoon());renderNotes()}
+  if(data.mem&&Array.isArray(data.mem.f)){const keep=new Set(data.mem.f.map(x=>x.t.toLowerCase()));mem.f.forEach(x=>{if(!keep.has(x.t.toLowerCase()))forget(x.t)});data.mem.f.forEach(x=>unforget(x.t));mem.f=data.mem.f;saveMem()}
+  toast('Tidied memory loaded'+(syncOn()?' and shared with your other device':''))}
+async function tidyLink(){const m=location.hash.match(/^#tidy=([A-Za-z0-9_-]+)$/);if(!m)return;
+  try{history.replaceState(null,'',location.pathname)}catch(e){}
+  try{const b64=m[1].replace(/-/g,'+').replace(/_/g,'/');const bin=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+    const txt=await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+    const d=JSON.parse(txt);if(d&&d.app==='afterdark'&&d.kind==='cleanup')applyCleanup(d)}catch(e){toast('That link didn\u2019t load. Ask Claude for a new one.')}}
+tidyLink();window.addEventListener('hashchange',tidyLink);
 $('memCopy').onclick=async()=>{const t=memDump();try{await navigator.clipboard.writeText(t);toast('Copied. Paste it into Claude.')}catch(e){$('memFeed').value=t;toast('Couldn\u2019t copy. It\u2019s in the Feed box: select all and copy')}};
 $('memFeedGo').onclick=()=>feedMem($('memFeed').value);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')catchUp(false)});
@@ -957,14 +970,10 @@ $('restoreFile').addEventListener('change',async e=>{
   if(Array.isArray(data.photos)&&db){for(const p of photos)await delPhoto(p.id);for(const d of data.photos){try{await addPhoto(await dataToBlob(d))}catch(err){}}}
   if(data.settings){settings=Object.assign(settings,data.settings);['onReply','onOpen','onTimer','minutes','shuffle','dim','blur','name','photosOn','bubbleA','solo'].forEach(k=>store.set(k,settings[k]))}
   if(data.play&&typeof data.play==='object'){play=data.play;playExtra=Array.isArray(data.playExtra)?data.playExtra:[];savePlay()}
-  if(typeof data.profile==='string'){adaMem=data.profile;store.set('profile',adaMem);$('adaMem').value=adaMem}
-  if(data.kind==='cleanup'){
-    if(typeof data.profile==='string'){adaMem=data.profile;store.set('profile',adaMem);$('adaMem').value=adaMem}
-    if(Array.isArray(data.notes)){notes=data.notes;store.set('notes',notes);renderNotes()}
-    if(data.mem&&Array.isArray(data.mem.f)){const keep=new Set(data.mem.f.map(x=>x.t.toLowerCase()));mem.f.forEach(x=>{if(!keep.has(x.t.toLowerCase()))forget(x.t)});data.mem.f.forEach(x=>unforget(x.t));mem.f=data.mem.f;saveMem()}
-    toast('Tidied memory loaded');return}
+  if(typeof data.profile==='string'){adaMem=data.profile;(store.set('profile',adaMem),store.set('profileAt',Date.now()),syncSoon());$('adaMem').value=adaMem}
+  if(data.kind==='cleanup'){applyCleanup(data);return}
   if(data.mem&&Array.isArray(data.mem.f)){if(data.kind==='profile'&&mem.f.length){data.mem.f.forEach(x=>{if(!mem.f.some(y=>y.t===x.t))mem.f.push(x)})}else mem=data.mem;saveMem()}
-  if(Array.isArray(data.notes)&&(data.kind!=='profile'||!notes.length)){notes=data.notes;store.set('notes',notes);renderNotes()}
+  if(Array.isArray(data.notes)&&(data.kind!=='profile'||!notes.length)){notes=data.notes;(store.set('notes',notes),store.set('notesAt',Date.now()),syncSoon());renderNotes()}
   if(Array.isArray(data.toys)){if(data.kind==='profile'){data.toys.forEach(t=>{if(!toys.some(x=>x.n.toLowerCase()===t.n.toLowerCase()))toys.push(t)});saveToys()}else{toys=data.toys;saveToys()}}if(data.sess){sess=data.sess;store.set('sess',sess)}
   if(typeof data.persona==='string'){persona=data.persona;store.set('persona',persona);$('persona').value=persona}
   if(Array.isArray(data.history)){history=data.history;saveHistory();chat.innerHTML='';history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'))}

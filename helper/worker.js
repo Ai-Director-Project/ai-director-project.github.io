@@ -74,7 +74,11 @@ export default {
       await env.STORE.put("mem", JSON.stringify({
         n: +body.n || 0,
         f: body.f.slice(0, 5000),
-        gone: Array.isArray(body.gone) ? body.gone.slice(-3000) : []
+        gone: Array.isArray(body.gone) ? body.gone.slice(-3000) : [],
+        p: typeof body.p === "string" ? body.p.slice(0, 200000) : "",
+        pu: +body.pu || 0,
+        notes: Array.isArray(body.notes) ? body.notes.slice(-200) : [],
+        nu: +body.nu || 0
       }));
       return reply({ ok: true });
     }
