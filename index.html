@@ -132,7 +132,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
   </main>
 
   <div class="laf" id="laf" hidden>
-    <div class="lafrow"><span>Liked</span><input type="range" id="lafL" min="1" max="10" step="1"><b id="lafLv"></b></div>
+    <div class="lafrow"><span>Liked it</span><input type="range" id="lafL" min="1" max="10" step="1"><b id="lafLv"></b></div>
     <div class="lafrow"><span>Arousal</span><input type="range" id="lafA" min="0" max="10" step="1"><b id="lafAv"></b></div>
     <div class="lafrow"><span>Did it?</span><div class="row" style="gap:6px;flex:1"><button class="tab" data-f="Y">Yes</button><button class="tab" data-f="P">Partly</button><button class="tab" data-f="N">No</button></div></div>
     <div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" id="lafX">✕</button><button class="btn primary" id="lafSend">Send</button></div>
@@ -144,6 +144,7 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
     <input type="file" id="camFront" accept="image/*" capture="user" hidden>
     <input type="file" id="camBack" accept="image/*" capture="environment" hidden>
     <textarea id="input" rows="1" placeholder="Say something…" aria-label="Message"></textarea>
+    <button class="send cam" id="fbBtn" aria-label="Give feedback">🎚️</button>
     <button class="send" id="send" aria-label="Send">➤</button>
   </div>
   <button class="void" id="void">VOIDLOCK</button>
@@ -239,6 +240,11 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
         <div id="memList" class="choice" style="margin-top:10px"></div>
         <p class="empty" style="margin-top:6px">Tap ✕ twice to make her forget something.</p>
       </details>
+      <div id="syncBox" style="margin-top:12px">
+        <p class="empty">Share her memory with your other devices: type the same secret phrase on each one.</p>
+        <div class="row" style="margin-top:8px"><input id="syncIn" class="btn" type="password" autocomplete="off" placeholder="Secret phrase (8+ letters)" style="flex:1;min-width:0"><button class="btn primary" id="syncGo">Connect</button></div>
+        <p class="empty" id="syncStat" style="margin-top:6px"></p>
+      </div>
     </section>
 
     <section>
@@ -652,7 +658,7 @@ $('adaMem').value=adaMem;$('adaMem').oninput=e=>{adaMem=e.target.value;store.set
 renderNotes();
 function saveNotes(reply){const found=[...String(reply).matchAll(/\[NOTE:\s*([^\]]{3,400})\]/gi)].map(m=>m[1].trim());if(!found.length)return;
   const d=new Date().toLocaleDateString('en-CA');found.slice(0,3).forEach(t=>notes.push({d,t}));notes=notes.slice(-60);store.set('notes',notes);renderNotes();note('📝 '+(settings.name||'Vesper')+' saved '+found.length+' note'+(found.length>1?'s':''))}
-const CURRENT_FACTS="\n\nCURRENT FACTS (these override anything older above):\n- This chat runs in Tim's own app, which exists only for your sessions: you are ALWAYS in character here. KINK is not needed in this app (if he types it anyway, just play along).\n- A session starts when Tim taps Start in the app; it then sends you his privacy, time, arousal, direction and chosen toys (see session settings below). Never ask him for P, T or A; you already have them. Open the session yourself and take the lead straight away. Ask about wishes only if it adds something.\n- VOIDLOCK is now a persistent lockout: it stops all toys and blocks commands until Tim resets it himself. If he types VOIDLOCK the app triggers it automatically.\n- Tim removed the old intensity, duration and three-stage limits on toy commands; ignore them. Toys can only be controlled through the tags explained below, and only toys marked connected.\n- The key safe is ordered but not connected. E-stim is not connected.\n- Never give advice on medication doses or timing. If he says his medication feels too strong, suggest he speaks to his doctor.\n- With nipple clamps, build in regular breaks and have him check for numbness or colour change.\n- Quick commands KINK, MORE, EASY, SKIP, STATUS, END and VOIDLOCK work as in his instructions. On END, include [STOP] if toys may still be running.\n- Check-ins: ONLY ask for his L/A/F after he has finished a task you gave him (never after ordinary chat, and never twice in a row). Between tasks just read how he's doing from what he writes. When you do want it, end your message with [CHECKIN]. The app shows him quick sliders and sends back something like 'L7 A6 FY'. Don't spell out what L, A and F mean every time.\n- TASKS MUST BE POSSIBLE AND THOUGHT THROUGH. Before you give Tim any task, request or photo, silently check it against: the session privacy setting, everything under MUST ALWAYS RESPECT, the toys he actually has, the time left, and what he is likely doing right now. If it breaks any of them, don't give it; pick something that fits. Make every task make sense: clear, specific, physically doable where he is, with exactly what to do, for how long and how you'll check it. Picture him actually doing it step by step first. If you are unsure whether something is possible for him, ask one quick question instead of guessing.\n- If Tim says a task isn't possible or doesn't make sense, accept it straight away without arguing, briefly own it, give him a workable alternative, and add a [NOTE: ...] saying what he can't do and why, so it never happens again.\n- Learning: after END feedback (best / less / next), or whenever you learn something worth keeping, add 1 to 3 short factual notes as [NOTE: ...]. The page hides and saves them and gives them back to you every session.";
+const CURRENT_FACTS="\n\nCURRENT FACTS (these override anything older above):\n- This chat runs in Tim's own app, which exists only for your sessions: you are ALWAYS in character here. KINK is not needed in this app (if he types it anyway, just play along).\n- A session starts when Tim taps Start in the app; it then sends you his privacy, time, arousal, direction and chosen toys (see session settings below). Never ask him for P, T or A; you already have them. Open the session yourself and take the lead straight away. Ask about wishes only if it adds something.\n- VOIDLOCK is now a persistent lockout: it stops all toys and blocks commands until Tim resets it himself. If he types VOIDLOCK the app triggers it automatically.\n- Tim removed the old intensity, duration and three-stage limits on toy commands; ignore them. Toys can only be controlled through the tags explained below, and only toys marked connected.\n- The key safe is ordered but not connected. E-stim is not connected.\n- Never give advice on medication doses or timing. If he says his medication feels too strong, suggest he speaks to his doctor.\n- With nipple clamps, build in regular breaks and have him check for numbness or colour change.\n- Quick commands KINK, MORE, EASY, SKIP, STATUS, END and VOIDLOCK work as in his instructions. On END, include [STOP] if toys may still be running.\n- Feedback: the app has sliders for how much he liked something, his arousal, and whether he did the task. Only ask for feedback after he has finished a task you gave him (never after ordinary chat, and never twice in a row); between tasks just read how he's doing from what he writes. To ask, end your message with [CHECKIN] and the sliders pop up for him. He can also send feedback whenever he likes; it arrives as a message starting 'My feedback:'. Take it on board and respond in character; never talk in letter codes like L, A or F.\n- TASKS MUST BE POSSIBLE AND THOUGHT THROUGH. Before you give Tim any task, request or photo, silently check it against: the session privacy setting, everything under MUST ALWAYS RESPECT, the toys he actually has, the time left, and what he is likely doing right now. If it breaks any of them, don't give it; pick something that fits. Make every task make sense: clear, specific, physically doable where he is, with exactly what to do, for how long and how you'll check it. Picture him actually doing it step by step first. If you are unsure whether something is possible for him, ask one quick question instead of guessing.\n- If Tim says a task isn't possible or doesn't make sense, accept it straight away without arguing, briefly own it, give him a workable alternative, and add a [NOTE: ...] saying what he can't do and why, so it never happens again.\n- Learning: after END feedback (best / less / next), or whenever you learn something worth keeping, add 1 to 3 short factual notes as [NOTE: ...]. The page hides and saves them and gives them back to you every session.";
 function memPrompt(){let t='';
   if(adaMem.trim())t+='\n\nABOUT TIM AND HOW YOUR SESSIONS WORK (his saved instructions and memory):\n'+adaMem.trim();
   if(notes.length)t+='\n\nYOUR NOTES FROM PAST SESSIONS (oldest first):\n'+notes.map(n=>'- '+n.d+': '+n.t).join('\n');
@@ -661,8 +667,24 @@ function memPrompt(){let t='';
 /* long-term memory: the net */
 const MUST='Must always respect';
 const MEM_SECTIONS=[MUST,'Who he is','His life and routine','What turns him on','Limits, dislikes and boundaries','How sessions go best','Things he has told her','Their story so far'];
-let mem=store.get('mem',{n:0,f:[]});if(!mem||!Array.isArray(mem.f))mem={n:0,f:[]};
-function saveMem(){store.set('mem',mem);renderMem()}
+let mem=store.get('mem',{n:0,f:[]});if(!mem||!Array.isArray(mem.f))mem={n:0,f:[]};if(!Array.isArray(mem.gone))mem.gone=[];
+function forget(t){const k=String(t).toLowerCase();if(!mem.gone.includes(k))mem.gone.push(k);mem.gone=mem.gone.slice(-3000)}
+function unforget(t){const k=String(t).toLowerCase();mem.gone=mem.gone.filter(x=>x!==k)}
+function saveMem(noSync){store.set('mem',mem);renderMem();if(!noSync)syncSoon()}
+/* share memory between devices through the Cloudflare helper */
+const HELPER='https://home-helper.REPLACE.workers.dev';
+let syncCode=store.get('syncCode','');let syncT=null;
+function syncOn(){return syncCode&&!HELPER.includes('REPLACE')}
+function syncSoon(){if(!syncOn())return;clearTimeout(syncT);syncT=setTimeout(syncMem,3000)}
+function mergeMem(a,b){const gone=[...new Set([...(a.gone||[]),...(b.gone||[])])].slice(-3000);const g=new Set(gone);const seen=new Set();const f=[];
+  [...a.f,...(b.f||[])].forEach(x=>{const k=String(x.t).toLowerCase();if(g.has(k)||seen.has(k))return;seen.add(k);f.push(x)});return {n:Math.max(a.n||0,b.n||0),f,gone}}
+async function syncMem(manual){if(!syncOn())return false;
+  try{const h={'Content-Type':'application/json','X-Code':syncCode};
+    const r=await fetch(HELPER+'/mem',{headers:h});if(!r.ok)throw 0;const remote=await r.json();
+    mem=mergeMem(mem,remote&&Array.isArray(remote.f)?remote:{f:[]});saveMem(true);
+    const w=await fetch(HELPER+'/mem',{method:'PUT',headers:h,body:JSON.stringify({n:mem.n,f:mem.f,gone:mem.gone})});if(!w.ok)throw 0;
+    if(manual)toast('Memory shared with your other devices');return true}
+  catch(e){if(manual)toast('Couldn\u2019t reach the sharing helper');return false}}
 function memSize(){return mem.f.reduce((a,x)=>a+x.t.length+4,0)}
 function memText(){if(!mem.f.length)return '';
   let t='\n\nYOUR LONG-TERM MEMORY OF TIM (built up from everything he has told you over time; it is true unless he corrects it. Use it naturally and let it shape what you do; don\u2019t recite it back to him):';
@@ -675,7 +697,7 @@ function renderMem(){const k=Math.round(memSize()/1000);
   MEM_SECTIONS.forEach(sec=>{const items=mem.f.filter(x=>x.s===sec);if(!items.length)return;
     const h=document.createElement('p');h.className='empty';h.style.cssText='margin:8px 0 2px;font-weight:600';h.textContent=sec;L.appendChild(h);
     items.forEach(x=>{const d=document.createElement('div');d.className='toy';d.innerHTML='<span style="flex:1;font-size:14px"></span><button class="x" aria-label="Forget">\u2715</button>';
-      d.querySelector('span').textContent=x.t;d.querySelector('.x').onclick=()=>{if(confirmRemove(d)){mem.f=mem.f.filter(y=>y!==x);saveMem()}};L.appendChild(d)})})}
+      d.querySelector('span').textContent=x.t;d.querySelector('.x').onclick=()=>{if(confirmRemove(d)){forget(x.t);mem.f=mem.f.filter(y=>y!==x);saveMem()}};L.appendChild(d)})})}
 const NET_RULES="You are the memory keeper for Vesper, an AI companion who talks with Tim in his private adult chat app. You read a stretch of conversation (or text Tim pasted in) and update Vesper's long-term memory of Tim. Think of a net drifting through the sea: catch every titbit worth keeping, let the small stuff go.\n\nKEEP: facts about Tim and his life, people and pets he mentions, his work and routine, his body and health as he describes it, his tastes, desires, fantasies and kinks, what excites him and what doesn't, limits and boundaries, how he likes sessions run, his reactions and feedback, promises, plans, running jokes, nicknames, rules and rituals between them, and memorable moments. Be specific and concrete; keep his own words for anything that matters.\nDROP: greetings, filler, one-off logistics, the play-by-play of a session, app or tag messages, and anything already in memory.\nPut into '"+MUST+"' anything about his real-life situation that limits what he can actually do: who he lives with or who is around, where and when he can and can't be private, things he can't do or doesn't have, and any rule or reminder he has given Vesper (especially if he had to repeat it, or said a task was impossible and why). Never drop or weaken those.\nCorrect memory when Tim says something has changed, and merge near-duplicates.\nEach fact is one short line written about Tim in the third person (for example: 'Loves being teased slowly; said the long build-ups are the best part').\n\nReply ONLY with JSON in this exact shape:\n{\"add\":[{\"s\":\"<section>\",\"t\":\"<fact>\"}],\"change\":[{\"id\":<number>,\"t\":\"<new wording>\"}],\"remove\":[<number>]}\nSections (use exactly one of these names): "+MEM_SECTIONS.join(' | ')+".\nIf nothing is worth keeping, reply {\"add\":[],\"change\":[],\"remove\":[]}.";
 function memNumbered(){return mem.f.length?mem.f.map((x,i)=>i+' ['+x.s+'] '+x.t).join('\n'):'(empty)'}
 let netBusy=false;
@@ -686,12 +708,12 @@ async function netCall(sys,user){
   const j=await r.json();const c=(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||'';
   const a=c.indexOf('{'),b=c.lastIndexOf('}');if(a<0||b<a)throw new Error('no json');return JSON.parse(c.slice(a,b+1))}
 function applyNet(o){if(!o)return 0;const day=new Date().toLocaleDateString('en-CA');const old=mem.f.slice();let n=0;
-  (Array.isArray(o.change)?o.change:[]).forEach(c=>{const x=old[+c.id];if(x&&c.t&&String(c.t).trim()){x.t=String(c.t).trim().slice(0,400);x.d=day;n++}});
+  (Array.isArray(o.change)?o.change:[]).forEach(c=>{const x=old[+c.id];if(x&&c.t&&String(c.t).trim()){forget(x.t);x.t=String(c.t).trim().slice(0,400);unforget(x.t);x.d=day;n++}});
   const rm=new Set((Array.isArray(o.remove)?o.remove:[]).map(Number).filter(i=>old[i]).map(i=>old[i]));
-  mem.f=mem.f.filter(x=>!rm.has(x));n+=rm.size;
+  rm.forEach(x=>forget(x.t));mem.f=mem.f.filter(x=>!rm.has(x));n+=rm.size;
   (Array.isArray(o.add)?o.add:[]).forEach(a=>{const t=String(a&&a.t||'').trim().slice(0,400);if(t.length<3)return;
     if(mem.f.some(x=>x.t.toLowerCase()===t.toLowerCase()))return;
-    const s=MEM_SECTIONS.includes(a.s)?a.s:'Things he has told her';mem.f.push({s,t,d:day});n++});
+    const s=MEM_SECTIONS.includes(a.s)?a.s:'Things he has told her';unforget(t);mem.f.push({s,t,d:day});n++});
   saveMem();return n}
 async function netRun(text){
   const o=await netCall(NET_RULES,'CURRENT MEMORY (numbered):\n'+memNumbered()+'\n\nNEW MATERIAL TO SIFT:\n'+text);
@@ -701,7 +723,7 @@ async function netTidy(){/* when memory gets very big, merge overlaps section by
     try{const o=await netCall("You tidy one section of an AI companion's long-term memory about Tim. Merge duplicates and near-duplicates into single richer lines, drop anything trivial or outdated, and keep every distinct detail that matters. Reply ONLY with JSON: {\"lines\":[\"...\"]}",
       sec+':\n'+L.map(x=>'- '+x.t).join('\n'));
       if(Array.isArray(o.lines)&&o.lines.length>=Math.min(5,L.length/4)){const day=new Date().toLocaleDateString('en-CA');
-        mem.f=mem.f.filter(x=>x.s!==sec).concat(o.lines.map(t=>String(t).trim()).filter(t=>t.length>2).map(t=>({s:sec,t:t.slice(0,400),d:day})));saveMem()}}catch(e){}}}
+        L.forEach(x=>forget(x.t));mem.f=mem.f.filter(x=>x.s!==sec).concat(o.lines.map(t=>String(t).trim()).filter(t=>t.length>2).map(t=>{t=t.slice(0,400);unforget(t);return {s:sec,t,d:day}}));saveMem()}}catch(e){}}}
 function convoText(list){return list.map(m=>(m.hide?'[app] ':m.who==='me'?'Tim: ':'Vesper: ')+clean(m.text)).join('\n')}
 async function catchUp(force,list){if(!apiKey)return;if(list){for(let i=0;netBusy&&i<60;i++)await new Promise(r=>setTimeout(r,1000))}if(netBusy)return;
   const src=list||history;const fresh=src.filter(m=>!m.dg);
@@ -718,8 +740,15 @@ async function feedMem(text){text=String(text||'').trim();if(!text)return;if(!ap
   btn.disabled=false;btn.textContent='Let her read it';netBusy=false;mem.n++;saveMem();
   if(!failed)$('memFeed').value='';
   toast(failed?'Read '+(parts.length-failed)+' of '+parts.length+' parts. Tap again to retry.':'Done. She caught '+total+' thing'+(total===1?'':'s'))}
-renderMem();
+renderMem();syncMem();
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncMem()});
 $('memNow').onclick=()=>{if(!apiKey){toast('Add your Grok key in \u2630 first');return}if(netBusy){toast('Already working on it');return}if(!history.some(m=>!m.dg)){toast('Nothing new since last time');return}toast('Sifting your recent chat\u2026');catchUp(true)};
+function syncShow(){$('syncBox').hidden=HELPER.includes('REPLACE');$('syncStat').textContent=syncCode?'Connected. Her memory is shared.':'Not connected yet.';$('syncIn').value=syncCode}
+syncShow();
+$('syncGo').onclick=async()=>{const c=$('syncIn').value.trim();if(c.length<8){toast('Use at least 8 letters');return}
+  try{const r=await fetch(HELPER+'/claim',{method:'POST',headers:{'X-Code':c}});
+    if(r.status===403){toast('That phrase doesn\u2019t match your other device');return}if(!r.ok)throw 0;
+    syncCode=c;store.set('syncCode',c);syncShow();await syncMem(true)}catch(e){toast('Couldn\u2019t reach the sharing helper')}};
 $('memFeedGo').onclick=()=>feedMem($('memFeed').value);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')catchUp(false)});
 
@@ -740,12 +769,13 @@ async function askGrok(extra){
 let lafF='Y',lafT=null;
 function lafVals(){$('lafLv').textContent=$('lafL').value;$('lafAv').textContent=$('lafA').value;$('laf').querySelectorAll('[data-f]').forEach(b=>b.classList.toggle('on',b.dataset.f===lafF))}
 function lafIdle(){clearTimeout(lafT);lafT=setTimeout(hideLaf,30000)}
-function showLaf(){$('lafL').value=7;$('lafA').value=sess.aro;lafF='Y';lafVals();const p=$('laf');p.hidden=false;p.classList.add('gone');requestAnimationFrame(()=>p.classList.remove('gone'));lafIdle()}
+function showLaf(){$('lafL').value=7;$('lafA').value=sess.aro;lafF='';lafVals();const p=$('laf');p.hidden=false;p.classList.add('gone');requestAnimationFrame(()=>p.classList.remove('gone'));lafIdle()}
 function hideLaf(){clearTimeout(lafT);const p=$('laf');p.classList.add('gone');setTimeout(()=>{p.hidden=true},400)}
 ['lafL','lafA'].forEach(id=>$(id).oninput=()=>{lafVals();lafIdle()});
-$('laf').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{lafF=b.dataset.f;lafVals();lafIdle()});
+$('laf').querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{lafF=lafF===b.dataset.f?'':b.dataset.f;lafVals();lafIdle()});
 $('lafX').onclick=hideLaf;
-$('lafSend').onclick=()=>{const l=$('lafL').value,a=$('lafA').value;sess.aro=+a;store.set('sess',sess);hideLaf();$('input').value='L'+l+' A'+a+' F'+lafF;send()};
+$('lafSend').onclick=()=>{const l=$('lafL').value,a=$('lafA').value;sess.aro=+a;store.set('sess',sess);hideLaf();$('input').value='My feedback: liked it '+l+' out of 10, arousal '+a+' out of 10'+(lafF?', did the task: '+({Y:'yes',P:'partly',N:'no'})[lafF]:'')+'.';send()};
+$('fbBtn').onclick=()=>{if($('laf').hidden)showLaf();else hideLaf()};
 let lafLast=store.get('lafLast',0);
 function handleReply(t,reply){
   if((/\[CHECKIN\]/i.test(reply)||/\bL\s*[,\/]?\s*A\s*[,\/]?\s*(?:and\s+)?F\b/.test(reply))&&Date.now()-lafLast>8*60000){lafLast=Date.now();store.set('lafLast',lafLast);setTimeout(showLaf,600)}

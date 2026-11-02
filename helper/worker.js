@@ -45,6 +45,20 @@ export default {
       }));
       return reply({ ok: true });
     }
+    if (path === "/mem" && req.method === "GET") {
+      const data = await env.STORE.get("mem", "json");
+      return reply(data || { n: 0, f: [], gone: [] });
+    }
+    if (path === "/mem" && req.method === "PUT") {
+      const body = await req.json();
+      if (!body || !Array.isArray(body.f)) return reply({ error: "bad memory" }, 400);
+      await env.STORE.put("mem", JSON.stringify({
+        n: +body.n || 0,
+        f: body.f.slice(0, 5000),
+        gone: Array.isArray(body.gone) ? body.gone.slice(-3000) : []
+      }));
+      return reply({ ok: true });
+    }
     if (path === "/key" && req.method === "PUT") {
       const body = await req.json();
       if (!body.key || !String(body.key).startsWith("xai-")) return reply({ error: "not an xAI key" }, 400);
