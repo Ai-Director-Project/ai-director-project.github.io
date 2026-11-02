@@ -487,7 +487,9 @@ async function runToyTags(reply){
   if(!settings.adaCtl)return;const tags=[...reply.matchAll(TOYTAG)].slice(0,4);
   for(const m of tags){
     let f,label;
-    if(m[11]){f={action:'GEMINI_STOP'};label='All toys stopped'}
+    if(m[11]){/* soft stop: level 0 on each toy. Make's STOP action also locks everything like VOIDLOCK, so never send it from here */
+      let ok=0;for(const k of ['GEMINI','HUSH','TENERA']){const r=await toyCall({action:k+'_VIBRATE',confirmation:'YES',intensity:'0',duration_s:'1'});if(toyOk(r))ok++}
+      logToy('All toys stopped');note('\u23F9 Toys stopped');continue}
     else{const t=connectedLov().find(x=>lovKey(x.n)===lovKey(m[1]||''));if(!t){logToy((m[1]||'?')+' isn\u2019t a toy the app knows, skipped');note((m[1]||'Toy')+' isn\u2019t one of your app toys');continue}
       const k=lovKey(t.n);
       if(m[2]){if(k!=='GEMINI')continue;const sec=Math.min(300,+m[4]||10);f={action:'GEMINI_PRESET',confirmation:'YES',name:m[3].toLowerCase(),duration_s:String(sec)};label=t.n+': '+m[3].toLowerCase()+' for '+sec+'s'}
