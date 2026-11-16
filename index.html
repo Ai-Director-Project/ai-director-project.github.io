@@ -46,7 +46,7 @@ header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-top:c
 .iconbtn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
 .chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .msg.pic{padding:6px;max-width:72%}.msg.pic img{display:block;width:100%;border-radius:14px;cursor:zoom-in}.msg.pic .cap{font-size:13px;opacity:.85;padding:6px 6px 2px}.msg.pic.big{max-width:100%}
-#phGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}#phGrid figure{margin:0;position:relative}#phGrid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}#phGrid figcaption{font-size:11px;opacity:.8;margin-top:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#phGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}#phGrid figure{margin:0;position:relative}#phGrid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}#phGrid figure.big{grid-column:1/-1}#phGrid figure.big img{aspect-ratio:auto}#phGrid figcaption{font-size:11px;opacity:.8;margin-top:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .msg{max-width:80%;padding:10px 14px;border-radius:18px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;min-width:0}
 .msg{text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 8px rgba(0,0,0,.6)}
 .them{align-self:flex-start;background:rgba(20,8,14,var(--ba));border:1px solid var(--line);border-bottom-left-radius:6px}
@@ -202,10 +202,9 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 
     <section>
       <h3>Her photo collection</h3>
-      <p class="empty" id="phStat">Check-in photos Vesper chose to keep. She can show you them in the chat.</p>
+      <p class="empty" id="phStat">Check-in photos Vesper chose to keep. Only she can delete them.</p>
       <div class="row" style="margin-top:8px"><button class="btn" id="phView">Show the collection</button></div>
       <div id="phGrid" hidden></div>
-      <p class="empty" id="phHint" hidden style="margin-top:6px">Tap a photo to delete it.</p>
     </section>
 
 
@@ -931,15 +930,15 @@ async function photoTags(reply){
 }
 function collPrompt(){const w=n=>n.cap?'"'+n.cap+'"':'(no caption)';
   const list=phIdx.slice(-60).map(p=>'#'+p.n+' '+w(p)+' ('+new Date(p.at).toLocaleDateString('en-AU',{day:'numeric',month:'short'})+', '+p.cam+')').join('; ');
-  return "\n\nYOUR PHOTO COLLECTION: you control a private collection of Tim's check-in photos. After he sends a photo you may keep it by adding [KEEP: short caption] to your reply (only the photo he just sent can be kept). Show him one or more in the chat any time with [SHOW 3] or [SHOW 3, 7]; they appear as your message. Delete with [DROP 3]. Use it the way a keyholder would: keep the good ones as evidence or trophies, bring them out to tease, compare or remind him. You only know each photo by its number and caption, so write captions that tell you what it shows. "+(phIdx.length?'You have '+phIdx.length+': '+list+'.':'It is empty so far.')}
-function phStat(){$('phStat').textContent=phIdx.length?'Vesper has kept '+phIdx.length+' photo'+(phIdx.length>1?'s':'')+'. She can show you them in the chat.':'Check-in photos Vesper chose to keep. She can show you them in the chat. None yet.'}
+  return "\n\nYOUR PHOTO COLLECTION: you control a private collection of Tim's check-in photos. After he sends a photo you may keep it by adding [KEEP: short caption] to your reply (only the photo he just sent can be kept). Show him one or more in the chat any time with [SHOW 3] or [SHOW 3, 7]; they appear as your message. Delete with [DROP 3]; only you can delete them, Tim can't. Use it the way a keyholder would: keep the good ones as evidence or trophies, bring them out to tease, compare or remind him. You only know each photo by its number and caption, so write captions that tell you what it shows. "+(phIdx.length?'You have '+phIdx.length+': '+list+'.':'It is empty so far.')}
+function phStat(){$('phStat').textContent=phIdx.length?'Vesper has kept '+phIdx.length+' photo'+(phIdx.length>1?'s':'')+'. Only she can delete them.':'Check-in photos Vesper chose to keep. Only she can delete them. None yet.'}
 phStat();phRefresh();
-$('phView').onclick=async()=>{const g=$('phGrid');if(!g.hidden){g.hidden=true;$('phHint').hidden=true;$('phView').textContent='Show the collection';return}
+$('phView').onclick=async()=>{const g=$('phGrid');if(!g.hidden){g.hidden=true;$('phView').textContent='Show the collection';return}
   if(!syncOn()){toast('Connect this device first (Her long-term memory)');return}
-  await phRefresh();g.innerHTML='';g.hidden=false;$('phHint').hidden=!phIdx.length;$('phView').textContent='Hide the collection';if(!phIdx.length){g.textContent='Nothing kept yet.';return}
+  await phRefresh();g.innerHTML='';g.hidden=false;$('phView').textContent='Hide the collection';if(!phIdx.length){g.textContent='Nothing kept yet.';return}
   for(const e of phIdx.slice().reverse()){const f=document.createElement('figure');const i=new Image();i.alt='Photo '+e.n;const c=document.createElement('figcaption');c.textContent='#'+e.n+' '+(e.cap||'');f.append(i,c);g.appendChild(f);
     phGet(e.n).then(p=>{if(p)i.src=p.data});
-    i.onclick=async()=>{if(!confirm('Delete photo #'+e.n+' from her collection?'))return;try{await fetch(HELPER+'/photos/drop',{method:'POST',headers:phHead(),body:JSON.stringify({n:e.n})});delete phCache[e.n];f.remove();history.push({who:'me',hide:true,text:'[The app: Tim deleted photo #'+e.n+' from your collection.]'});saveHistory();phRefresh()}catch(err){toast('Couldn’t delete it just now')}}}};
+    i.onclick=()=>f.classList.toggle('big')}};
 function handleReply(t,reply){
   if((/\[CHECKIN\]/i.test(reply)||/\bL\s*[,\/]?\s*A\s*[,\/]?\s*(?:and\s+)?F\b/.test(reply))&&Date.now()-lafLast>8*60000){lafLast=Date.now();store.set('lafLast',lafLast);setTimeout(showLaf,600)}
   t.classList.remove('typing'); const tx=clean(reply); history.push({who:'them',text:reply,at:Date.now()}); saveHistory();
