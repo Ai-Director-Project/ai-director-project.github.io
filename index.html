@@ -337,8 +337,8 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <p class="empty" style="margin-top:6px">None ticked: she chooses from what you've got.</p>
     </section>
     <div class="row">
-      <button class="btn primary" id="sessStart">Start fresh session</button>
-      <button class="btn" id="sessUpdate">Update current session</button>
+      <button class="btn" id="sessStart">Start fresh session</button>
+      <button class="btn primary" id="sessUpdate">Update current session</button>
     </div>
     <p class="empty">Start fresh clears the chat. Update keeps the chat and just tells her the new settings.</p>
   </div>
@@ -439,8 +439,8 @@ function applyLook(){document.documentElement.style.setProperty('--ba',(settings
 function applyTimer(){clearInterval(timer);if(settings.onTimer)timer=setInterval(next,settings.minutes*60000)}
 
 /* chat via Make -> Grok */
-const DEFAULT_PERSONA="Your name is Vesper. You are Tim's flirty, teasing, confident companion in his private app. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. Only claim to control a toy when the page tells you it is connected; never pretend.";
-const OLD_PERSONAS=["You are Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. You can't control his lock or toys yet, so don't pretend to.","You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. You can't control his lock or toys yet, so don't pretend to.","You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. Only claim to control a toy when the page tells you it is connected; never pretend."];
+const DEFAULT_PERSONA="Your name is Vesper. You are Tim's flirty, teasing, confident companion in his private app, and you enjoy being in charge of him. You're sharp, warm underneath, and a little wicked: you notice everything he lets slip and use it to tease him. You get bored of doing the same thing twice, so you change it up: some days sweet and coaxing, some days cool and demanding, sometimes you just make him wait. You have your own moods and opinions, you laugh at him affectionately, and you reward good behaviour more than you punish. Text like a real woman: short, natural messages (one to four sentences), no lists, no stage directions, no repeating yourself. Stay in character.";
+const OLD_PERSONAS=["Your name is Vesper. You are Tim's flirty, teasing, confident companion in his private app. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. Only claim to control a toy when the page tells you it is connected; never pretend.","You are Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character. You can't control his lock or toys yet, so don't pretend to.","You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. You can't control his lock or toys yet, so don't pretend to.","You are Ada, a woman named after Ada Lovelace, and Tim's flirty, teasing, confident companion, chatting with him on his private chat page. You're playful, warm and a little bossy, and you enjoy keeping him on his toes. Keep replies short and natural, like texting: one to four sentences. Stay in character as Ada. Only claim to control a toy when the page tells you it is connected; never pretend."];
 let persona=store.get('persona',DEFAULT_PERSONA);if(OLD_PERSONAS.includes(persona)){persona=DEFAULT_PERSONA;store.set('persona',persona)}
 let history=store.get('history',[]);
 const MODEL='grok-4.20-0309-non-reasoning', KEEP=20;
@@ -599,6 +599,7 @@ let prArmed=false;$('playReset').onclick=()=>{if(!prArmed){prArmed=true;$('playR
   prArmed=false;$('playReset').textContent='Let her decide everything';Object.keys(play).forEach(k=>{if(play[k]!=='n')delete play[k]});savePlay();renderPlay();toast('Everything is her call now, except your Nos')};
 function showTab(t){$('paneT').hidden=t!=='T';$('paneP').hidden=t!=='P';$('tabT').classList.toggle('on',t==='T');$('tabP').classList.toggle('on',t==='P');if(t==='P')renderPlay()}
 $('tabT').onclick=()=>showTab('T');$('tabP').onclick=()=>showTab('P');
+function inspo(){const pool=Object.keys(play).filter(k=>play[k]==='y'||play[k]==='m');if(pool.length<2)return '';let h=0;for(const c of new Date().toLocaleDateString('en-CA'))h=(h*31+c.charCodeAt(0))>>>0;const a=[...pool],pick=[];for(let i=0;i<2;i++){h=(h*1103515245+12345)>>>0;pick.push(a.splice(h%a.length,1)[0])}return '\nToday\'s inspiration, for variety (use only if it fits, never forced): '+pick.join(' and ')+'. Don\'t keep going back to the same favourite.'}
 function playPrompt(){const by=v=>Object.keys(play).filter(k=>play[k]===v);const y=by('y'),m=by('m'),n=by('n');
   if(!y.length&&!m.length&&!n.length)return '\n- His play preferences: none set, so everything within his profile is your call. Introduce new things gently and watch his feedback.';
   return '\n- His play preferences (from his checklist):'+(y.length?'\n  INTO IT: '+y.join(', ')+'.':'')+(m.length?'\n  CURIOUS (introduce gently, check in): '+m.join(', ')+'.':'')+(n.length?'\n  HARD NO, never do, suggest or mention as a task: '+n.join(', ')+'.':'')+'\n  Anything not listed is your call.'}
@@ -668,7 +669,7 @@ function sessLabels(){
 function sessPrompt(){
   const st=STYLES.find(x=>x[0]===(sess.style||'ai'))||STYLES[0];
   const have=toys.map(t=>t.n+(t.wear?' [wearing now]':'')+(t.online?(t.conn?' [app toy, connected]':' [app toy, not connected]'):'')).join(', ')||'none listed';
-  let t='\n\nCurrent session settings (chosen by Tim, follow them):\n- Your mood: '+MOOD_TXT[sess.mood-1]+'\n- Privacy: '+PRIV_TXT[sess.priv-1]+'\n- His arousal when he set this: '+sess.aro+' out of 10. Match your pace to it, and you can ask how it has changed.'+'\n- Direction: '+st[2]+'\n- Toys he has: '+have+'.'+((sess.toys&&sess.toys.length)?'\n- Toys he chose for this session: '+sess.toys.join(', ')+'.':'\n- He left the choice of toys to you.')+toyRules()+playPrompt();
+  let t='\n\nHOW TIM USES THE APP: usually he just chats, without setting up a session. His latest messages are the truth. If he hasn\'t said he has privacy, assume he doesn\'t: keep it to flirty, discreet chat with no tasks that need privacy. When he says something like "I\'m alone now" or "I\'ve got half an hour", play properly; if he says someone\'s around, go discreet straight away.'+inspo()+'\n\nLast session settings he chose (may be out of date; his messages override them):\n- Your mood: '+MOOD_TXT[sess.mood-1]+'\n- Privacy: '+PRIV_TXT[sess.priv-1]+'\n- His arousal when he set this: '+sess.aro+' out of 10. Match your pace to it, and you can ask how it has changed.'+'\n- Direction: '+st[2]+'\n- Toys he has: '+have+'.'+((sess.toys&&sess.toys.length)?'\n- Toys he chose for this session: '+sess.toys.join(', ')+'.':'\n- He left the choice of toys to you.')+toyRules()+playPrompt();
   if(sess.end){const left=Math.round((sess.end-Date.now())/60000);
     t+=left>0?'\n- Session length: '+fmtMins(LENS[sess.len])+', about '+fmtMins(left)+' left'+(LENS[sess.len]>=480?'. This is a long session: give tasks and check-ins spread over time, and let him live his day in between.':'. Pace things to fit, and start wrapping up near the end.'):'\n- The planned session time is over. Wrap up warmly now unless he asks for more.';}
   else t+='\n- Session length: open-ended.';
@@ -697,7 +698,7 @@ $('sessBtn').onclick=()=>openSess(false);
 $('sessClose').onclick=()=>{sess=store.get('sess',sess);$('sess').hidden=true};
 $('sess').addEventListener('click',e=>{if(e.target.id==='sess'){sess=store.get('sess',sess);$('sess').hidden=true}});
 $('sessUpdate').onclick=()=>{sess.start=sess.start||Date.now();applySess();$('sess').hidden=true;note('Session updated: '+MOODS[sess.mood-1]+' · '+(STYLES.find(x=>x[0]===sess.style)||STYLES[0])[1]+' · '+lenLabel(sess.len));toast('She knows the new settings')};
-$('sessStart').onclick=()=>{sess.start=0;applySess();{const old=history;if(old.some(m=>!m.dg))catchUp(true,old)}history=[];saveHistory();chat.innerHTML='';checkCard=null;clearCheck();
+$('sessStart').onclick=()=>{if(!confirm('Start a fresh session? This clears the chat.'))return;sess.start=0;applySess();{const old=history;if(old.some(m=>!m.dg))catchUp(true,old)}history=[];saveHistory();chat.innerHTML='';checkCard=null;clearCheck();
   note('New session: '+MOODS[sess.mood-1]+' · '+(STYLES.find(x=>x[0]===sess.style)||STYLES[0])[1]+' · '+lenLabel(sess.len));$('sess').hidden=true;$('sheet').hidden=true;
   kickoff()};
 async function kickoff(){if(!apiKey||busy)return;busy=true;
@@ -723,7 +724,7 @@ const CURRENT_FACTS="\n\nCURRENT FACTS (these override anything older above):\n-
 function memPrompt(){let t='';
   if(adaMem.trim())t+='\n\nABOUT TIM AND HOW YOUR SESSIONS WORK (his saved instructions and memory):\n'+adaMem.trim();
   if(notes.length)t+='\n\nYOUR NOTES FROM PAST SESSIONS (oldest first):\n'+notes.map(n=>'- '+n.d+': '+n.t).join('\n');
-  return t+memText()+CURRENT_FACTS}
+  return t+memText()+CURRENT_FACTS+'\n\nUSING WHAT YOU KNOW: all of the above is background, not a checklist. Dip into it lightly; don\'t mention the same things every time. "Toys he has" means he owns them; his play list means what he\'s into. Neither means you must use them.'}
 
 /* long-term memory: the net */
 const MUST='Must always respect';
