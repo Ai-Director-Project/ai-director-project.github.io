@@ -165,6 +165,14 @@ export default {
       await env.STORE.put("phidx", JSON.stringify(idx));
       return reply(e);
     }
+    if (path === "/photos/bg" && req.method === "GET") {
+      return reply((await env.STORE.get("herbg", "json")) || {});
+    }
+    if (path === "/photos/bg" && req.method === "PUT") {
+      const b = await req.json().catch(() => ({}));
+      await env.STORE.put("herbg", JSON.stringify({ n: +b.n || 0, until: +b.until || 0, at: Date.now() }));
+      return reply({ ok: true });
+    }
     const pm = path.match(/^\/photos\/(\d{1,4})$/);
     if (pm && req.method === "GET") {
       const e = ((await env.STORE.get("phidx", "json")) || []).find(x => x.n === +pm[1]);

@@ -436,7 +436,11 @@ async function refresh(){
   buildOrder(); renderThumbs();
 }
 function buildOrder(){order=photos.map((_,i)=>i);if(settings.shuffle){for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]]}}pos=-1}
+let herBg=store.get('herBg',null), herBgUrl=null;
+function herBgOn(){return !!(herBg&&herBg.n&&(!herBg.until||herBg.until>Date.now()))}
 function next(){
+  if(settings.photosOn&&herBgOn()&&herBgUrl){$('logo').classList.remove('on');const cur=$('p'+layer);if(cur.dataset.her!==String(herBg.n)||!cur.classList.contains('on')){layer=1-layer;const show=$('p'+layer),hide=$('p'+(1-layer));show.style.backgroundImage=`url("${herBgUrl}")`;show.dataset.her=String(herBg.n);show.classList.add('on');hide.classList.remove('on')}return}
+  $('p0').dataset.her='';$('p1').dataset.her='';
   if(!urls.length||!settings.photosOn){$('p0').classList.remove('on');$('p1').classList.remove('on');$('logo').classList.add('on');return}
   $('logo').classList.remove('on');
   pos++; if(pos>=order.length){buildOrder();pos=0}
@@ -469,7 +473,7 @@ let hushT=null;
 function wake(){chat.classList.remove('hush');clearTimeout(hushT);const sec=+(store.get('hideSec',0));if(sec)hushT=setTimeout(()=>{if(!busy&&document.activeElement!==$('input'))chat.classList.add('hush')},sec*1000)}
 chat.addEventListener('click',wake);$('input').addEventListener('focus',wake);
 const TAG=/\[PHOTO(?:\s+(now|\d{1,4}(?:\.\d+)?))?(?:\s*(h|hr|hrs|hours?|m|min|mins|minutes?)\b)?(?:\s+(front|back))?\s*\]/i;
-function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*|TIMER [^\]]*|AFTER [^\]]*|RELEASE|KEEP(?::[^\]]*)?|SHOW[ #0-9,]*|DROP[ #0-9,]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
+function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*|TIMER [^\]]*|AFTER [^\]]*|RELEASE|KEEP(?::[^\]]*)?|SHOW[ #0-9,]*|DROP[ #0-9,]*|BACKGROUND[^\]]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
 function renderMsg(m){const tx=clean(m.text);if(tx||m.who==='me'||!showNums(m.text).length)bubble(tx||'…',m.who==='me'?'me':'them');if(m.who!=='me')showNums(m.text).forEach(n=>picBubble(n))}
 history.filter(m=>!m.hide).forEach(renderMsg);
 function saveHistory(){const cut=history.length-60;if(cut>0){const lost=history.slice(0,cut);if(lost.some(m=>!m.dg)&&typeof catchUp==='function')catchUp(true,lost)}history=history.slice(-60);store.set('history',history)}
@@ -925,14 +929,25 @@ async function photoTags(reply){
     else{try{const r=await fetch(HELPER+'/photos',{method:'POST',headers:phHead(),body:JSON.stringify({data:lastPhoto.data,cap:(k[1]||'').trim(),at:lastPhoto.at,cam:lastPhoto.cam})});const e=await r.json();
       if(!r.ok)throw e;phCache[e.n]={...e,data:lastPhoto.data};lastPhoto=null;history.push({who:'me',hide:true,text:'[The app: you kept that photo as #'+e.n+(e.cap?' "'+e.cap+'"':'')+'.]'});saveHistory();toast('Vesper kept photo #'+e.n);phRefresh()}
     catch(e){history.push({who:'me',hide:true,text:'[The app: keeping the photo FAILED'+(e&&e.error==='collection full'?' (your collection is full, drop some first)':'')+'.]'});saveHistory()}}}
+  const bg=reply.match(/\[BACKGROUND\s*(?:#?\s*(\d{1,4})(?:\s+(?:for\s+)?(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?|m|min|mins|minutes?)?)?|(off|normal|clear))\s*\]/i);
+  if(bg){if(bg[4])setHerBg(0,0,true);else{const v=bg[2]?parseFloat(bg[2]):0;setHerBg(parseInt(bg[1],10),bg[2]?Math.min(2880,Math.round(bg[3]&&/^h/i.test(bg[3])?v*60:v)):0,true)}}
   const dr=reply.match(/\[DROP\s*#?\s*([0-9 ,#]+)\]/i);
-  if(dr&&syncOn()){for(const v of dr[1].split(/[ ,#]+/)){const n=parseInt(v,10);if(n>0){try{await fetch(HELPER+'/photos/drop',{method:'POST',headers:phHead(),body:JSON.stringify({n})});delete phCache[n]}catch(e){}}}phRefresh()}
+  if(dr&&syncOn()){for(const v of dr[1].split(/[ ,#]+/)){const n=parseInt(v,10);if(n>0){try{await fetch(HELPER+'/photos/drop',{method:'POST',headers:phHead(),body:JSON.stringify({n})});delete phCache[n];if(herBg&&herBg.n===n)setHerBg(0,0,true)}catch(e){}}}phRefresh()}
 }
+/* Vesper can put one of her photos on the background screen */
+async function setHerBg(n,mins,share){
+  herBg=n?{n,until:mins?Date.now()+mins*60000:0}:null;store.set('herBg',herBg);herBgUrl=null;
+  if(share&&syncOn())fetch(HELPER+'/photos/bg',{method:'PUT',headers:phHead(),body:JSON.stringify(herBg||{n:0})}).catch(()=>{});
+  if(herBgOn()){const p=syncOn()?await phGet(n).catch(()=>null):null;if(!p){herBg=null;store.set('herBg',null);if(share){history.push({who:'me',hide:true,text:'[The app: photo #'+n+' isn\u2019t in your collection, the background didn\u2019t change.]'});saveHistory()}}else herBgUrl=p.data}
+  clearTimeout(setHerBg._t);if(herBgOn()&&herBg.until)setHerBg._t=setTimeout(()=>{herBg=null;store.set('herBg',null);herBgUrl=null;next()},herBg.until-Date.now());
+  next()}
+async function herBgSync(){if(!syncOn())return;try{const r=await fetch(HELPER+'/photos/bg',{headers:phHead()});if(!r.ok)return;const b=await r.json();const local=herBg?herBg.n+':'+herBg.until:'0';const remote=b.n?b.n+':'+(b.until||0):'0';
+  if(remote!==local){if(b.n&&(!b.until||b.until>Date.now()))setHerBg(b.n,0,false).then(()=>{if(herBg&&b.until){herBg.until=b.until;store.set('herBg',herBg)}});else setHerBg(0,0,false)}else if(herBgOn()&&!herBgUrl)setHerBg(herBg.n,herBg.until?(herBg.until-Date.now())/60000:0,false)}catch(e){}}
 function collPrompt(){const w=n=>n.cap?'"'+n.cap+'"':'(no caption)';
   const list=phIdx.slice(-60).map(p=>'#'+p.n+' '+w(p)+' ('+new Date(p.at).toLocaleDateString('en-AU',{day:'numeric',month:'short'})+', '+p.cam+')').join('; ');
-  return "\n\nYOUR PHOTO COLLECTION: you control a private collection of Tim's check-in photos. After he sends a photo you may keep it by adding [KEEP: short caption] to your reply (only the photo he just sent can be kept). Show him one or more in the chat any time with [SHOW 3] or [SHOW 3, 7]; they appear as your message. Delete with [DROP 3]; only you can delete them, Tim can't. Use it the way a keyholder would: keep the good ones as evidence or trophies, bring them out to tease, compare or remind him. You only know each photo by its number and caption, so write captions that tell you what it shows. "+(phIdx.length?'You have '+phIdx.length+': '+list+'.':'It is empty so far.')}
+  return "\n\nYOUR PHOTO COLLECTION: you control a private collection of Tim's check-in photos. After he sends a photo you may keep it by adding [KEEP: short caption] to your reply (only the photo he just sent can be kept). Show him one or more in the chat any time with [SHOW 3] or [SHOW 3, 7]; they appear as your message. Delete with [DROP 3]; only you can delete them, Tim can't. Put one on his background screen (behind the chat, where his own photos usually rotate) with [BACKGROUND 3], or for a while with [BACKGROUND 3 for 2h]; [BACKGROUND OFF] puts his usual photos back. If he has switched his photos off (for privacy) it stays hidden until he turns them on. Use it the way a keyholder would: keep the good ones as evidence or trophies, bring them out to tease, compare or remind him. You only know each photo by its number and caption, so write captions that tell you what it shows. "+(phIdx.length?'You have '+phIdx.length+': '+list+'.':'It is empty so far.')+(herBgOn()?' On his background now: #'+herBg.n+(herBg.until?' until '+new Date(herBg.until).toLocaleTimeString('en-AU',{hour:'numeric',minute:'2-digit'}).toLowerCase():'')+'.':'')}
 function phStat(){$('phStat').textContent=phIdx.length?'Vesper has kept '+phIdx.length+' photo'+(phIdx.length>1?'s':'')+'. Only she can delete them.':'Check-in photos Vesper chose to keep. Only she can delete them. None yet.'}
-phStat();phRefresh();
+phStat();phRefresh();herBgSync();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')herBgSync()});
 $('phView').onclick=async()=>{const g=$('phGrid');if(!g.hidden){g.hidden=true;$('phView').textContent='Show the collection';return}
   if(!syncOn()){toast('Connect this device first (Her long-term memory)');return}
   await phRefresh();g.innerHTML='';g.hidden=false;$('phView').textContent='Hide the collection';if(!phIdx.length){g.textContent='Nothing kept yet.';return}
