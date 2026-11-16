@@ -459,11 +459,11 @@ function note(text){chat.querySelectorAll('.note.fresh').forEach(n=>n.classList.
 let hushT=null;
 function wake(){chat.classList.remove('hush');clearTimeout(hushT);const sec=+(store.get('hideSec',0));if(sec)hushT=setTimeout(()=>{if(!busy&&document.activeElement!==$('input'))chat.classList.add('hush')},sec*1000)}
 chat.addEventListener('click',wake);$('input').addEventListener('focus',wake);
-const TAG=/\[PHOTO(?:\s+(now|\d{1,3}))?(?:\s*(?:min|mins|minutes)?)?(?:\s+(front|back))?\s*\]/i;
+const TAG=/\[PHOTO(?:\s+(now|\d{1,4}(?:\.\d+)?))?(?:\s*(h|hr|hrs|hours?|m|min|mins|minutes?)\b)?(?:\s+(front|back))?\s*\]/i;
 function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*|TIMER [^\]]*|AFTER [^\]]*|RELEASE)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
 history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'));
 function saveHistory(){const cut=history.length-60;if(cut>0){const lost=history.slice(0,cut);if(lost.some(m=>!m.dg)&&typeof catchUp==='function')catchUp(true,lost)}history=history.slice(-60);store.set('history',history)}
-const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, 0 to 120, then front or back camera). Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a check comes due he only has a short window to take the photo; if he misses it the page will tell you. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
+const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, then front or back camera) or [PHOTO 8h back] (hours from now). Anything from now up to 48 hours ahead works: his phone gets a notification when it's due even if the app is closed, so you can check on him through the day or overnight. Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a check comes due he only has a short window to take the photo; if he misses it the page will tell you. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
 /* toy bridge (Make) */
 const TOY_HOOK='https://hook.eu1.make.com/5ln4unqvf8sxitfag4kgwhrs1sapl82y';
 function lovKey(n){n=String(n).toLowerCase();return n.includes('gemini')?'GEMINI':n.includes('hush')?'HUSH':n.includes('tenera')?'TENERA':null}
@@ -896,7 +896,7 @@ function handleReply(t,reply){
   if((/\[CHECKIN\]/i.test(reply)||/\bL\s*[,\/]?\s*A\s*[,\/]?\s*(?:and\s+)?F\b/.test(reply))&&Date.now()-lafLast>8*60000){lafLast=Date.now();store.set('lafLast',lafLast);setTimeout(showLaf,600)}
   t.classList.remove('typing'); t.textContent=clean(reply)||'…'; history.push({who:'them',text:reply}); saveHistory();
   const m=reply.match(TAG);
-  if(m){const mins=(!m[1]||m[1].toLowerCase()==='now')?0:Math.min(120,parseInt(m[1],10));setCheck(Date.now()+mins*60000,(m[2]||'front').toLowerCase())}
+  if(m){const n=(!m[1]||m[1].toLowerCase()==='now')?0:parseFloat(m[1]);const mins=Math.min(2880,Math.round(m[2]&&/^h/i.test(m[2])?n*60:n));setCheck(Date.now()+mins*60000,(m[3]||'front').toLowerCase())}
   if(settings.onReply)next();
   if(/\[RELEASE\]/i.test(reply)||/\b(here'?s|there'?s|here is|there is|take) (your|the) (one[- ]time )?(key ?box )?code\b/i.test(reply))runRelease();
   runToyTags(reply);
@@ -917,7 +917,7 @@ async function send(){
 /* photo checks */
 let check=store.get('check',null), checkCard=null, tick=null, checkSetAt=store.get('checkSetAt',0), visSince=Date.now();
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')visSince=Date.now()});
-function fmt(ms){const s=Math.max(0,Math.ceil(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+function fmt(ms){const s=Math.max(0,Math.ceil(ms/1000));if(s>=3600){const h=Math.floor(s/3600),mi=Math.floor(s%3600/60);return h+'h '+String(mi).padStart(2,'0')+'m'}return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
 const ALERT_HOOK='https://hook.eu1.make.com/d8e85t5k2vaeyjwq556lrugd7xfoif3r';
 function alertMake(fields){try{fetch(ALERT_HOOK,{method:'POST',mode:'no-cors',body:new URLSearchParams(fields)}).catch(()=>{})}catch(e){}}
 function setCheck(due,cam){

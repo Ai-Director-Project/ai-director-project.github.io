@@ -129,10 +129,10 @@ export default {
     if (path === "/push/check" && req.method === "POST") {
       const b = await req.json().catch(() => ({}));
       const due = +b.due || 0;
-      if (!b.id || !due || due < Date.now() - 60000 || due > Date.now() + 6 * 3600000) return reply({ error: "bad check" }, 400);
+      if (!b.id || !due || due < Date.now() - 60000 || due > Date.now() + 48 * 3600000 + 120000) return reply({ error: "bad check" }, 400);
       const c = { id: String(b.id).slice(0, 40), due, cam: b.cam === "back" ? "back" : "front", win: +b.win || 0 };
       await env.STORE.put("pchk", JSON.stringify(c));
-      await env.STORE.put("lastchk", JSON.stringify(c), { expirationTtl: 7 * 3600 });
+      await env.STORE.put("lastchk", JSON.stringify(c), { expirationTtl: 49 * 3600 });
       const subs = (await env.STORE.get("subs", "json")) || [];
       return reply({ ok: true, subs: subs.length, devs: subs.map(x => x.dev) });
     }
