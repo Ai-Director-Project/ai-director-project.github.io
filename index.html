@@ -1051,6 +1051,7 @@ $('status').textContent=apiKey?(settings.name||'Vesper')+' · online':'Add your 
 if(check)renderCheck();
 sessStatus();
 startLater();
+{const lc=store.get('lastCode',null);if(lc&&lc.code&&Date.now()-lc.at<6*3600000){const d=document.createElement('div');d.className='note';d.style.cssText='font-size:1.3em;font-weight:600;opacity:1';d.textContent='\uD83D\uDD11 Key box code: '+lc.code+'  then #  (one use, until '+new Date(lc.at+6*3600000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+')';chat.appendChild(d);chat.scrollTop=chat.scrollHeight}}
 </script>
 </body>
 </html>
