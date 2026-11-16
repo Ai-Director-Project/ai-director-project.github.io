@@ -523,7 +523,7 @@ const RELEASE_HOOK='https://hook.eu1.make.com/nl9ritif9ia3f6ydluv7rw4yroxu258w',
 let lastRelease=0;
 async function runRelease(){if(Date.now()-lastRelease<120000)return;lastRelease=Date.now();note('\uD83D\uDD11 Vesper is releasing the key box\u2026');
   let code='';try{const r=await fetch(RELEASE_HOOK,{method:'POST',body:new URLSearchParams({key:RELEASE_KEY})});const j=JSON.parse(await r.text());code=(j.code||'').trim()}catch(e){}
-  if(/^\d{4,10}$/.test(code)){store.set('lastCode',{code,at:Date.now()});note('\uD83D\uDD11 Key box code: '+code+'  then #  (one use only, within 6 hours)');chat.lastElementChild.classList.add('keycode');toast('Key box code: '+code);
+  if(/^\d{4,10}$/.test(code)){store.set('lastCode',{code,at:Date.now()});note('\uD83D\uDD11 Key box code: '+code+'  then #  (one use only, within 6 hours)');{const k=chat.lastElementChild;k.classList.add('keycode');setTimeout(()=>k.remove(),60000)}toast('Key box code: '+code);
     history.push({who:'me',hide:true,text:'[The app: your release worked. Tim has been shown a one-time key box code.]'});saveHistory()}
   else{lastRelease=0;note('\u26A0\uFE0F The key box release didn\u2019t work. Tell Vesper to try again.');
     history.push({who:'me',hide:true,text:'[The app: your key box release FAILED, no code was given. Try [RELEASE] again.]'});saveHistory()}}
@@ -1053,7 +1053,7 @@ $('status').textContent=apiKey?(settings.name||'Vesper')+' · online':'Add your 
 if(check)renderCheck();
 sessStatus();
 startLater();
-{const lc=store.get('lastCode',null);if(lc&&lc.code&&Date.now()-lc.at<6*3600000){const d=document.createElement('div');d.className='note keycode';d.style.cssText='font-size:1.3em;font-weight:600;opacity:1';d.textContent='\uD83D\uDD11 Key box code: '+lc.code+'  then #  (one use, until '+new Date(lc.at+6*3600000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+')';chat.appendChild(d);chat.scrollTop=chat.scrollHeight}}
+{const lc=store.get('lastCode',null);if(lc&&lc.code&&Date.now()-lc.at<600000){const d=document.createElement('div');d.className='note keycode';d.style.cssText='font-size:1.3em;font-weight:600;opacity:1';d.textContent='\uD83D\uDD11 Key box code: '+lc.code+'  then #  (one use, until '+new Date(lc.at+6*3600000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+')';chat.appendChild(d);chat.scrollTop=chat.scrollHeight;setTimeout(()=>d.remove(),60000)}}
 </script>
 </body>
 </html>
