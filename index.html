@@ -919,8 +919,8 @@ function showNums(t){const out=[];String(t||'').replace(/\[SHOW\s*#?\s*([0-9 ,#]
 function phHead(){return{'Content-Type':'application/json','X-Code':syncCode}}
 async function phRefresh(){if(!syncOn())return;try{const r=await fetch(HELPER+'/photos',{headers:phHead()});if(r.ok){phIdx=await r.json();store.set('phIdx',phIdx);phStat()}}catch(e){}}
 async function phGet(n){if(phCache[n])return phCache[n];const r=await fetch(HELPER+'/photos/'+n,{headers:phHead()});if(!r.ok)return null;return phCache[n]=await r.json()}
-function picBubble(n){const d=document.createElement('div');d.className='msg them pic';d.textContent='📷 Photo #'+n+'…';chat.appendChild(d);markLatest();chat.scrollTop=chat.scrollHeight;
-  new Promise(r=>setTimeout(r,0)).then(()=>syncOn()?phGet(n):null).then(p=>{if(!p){d.textContent='📷 Photo #'+n+' isn’t in her collection.';return}
+function picBubble(n,fresh){const d=document.createElement('div');d.className='msg them pic';d.textContent='📷 Photo #'+n+'…';chat.appendChild(d);markLatest();chat.scrollTop=chat.scrollHeight;
+  new Promise(r=>setTimeout(r,0)).then(()=>syncOn()?phGet(n):null).then(p=>{if(!p){d.textContent='📷 Photo #'+n+' isn’t in her collection.';if(fresh){history.push({who:'me',hide:true,text:'[The app: you tried to show photo #'+n+' but it isn’t in your collection'+(phIdx.length?' (you have #'+phIdx.map(x=>x.n).join(', #')+')':' (it is empty: nothing has been kept yet, a photo is only kept when you add [KEEP: caption] right after he sends it)')+'. Don’t pretend he can see it.]'});saveHistory()}return}
     d.textContent='';const i=new Image();i.src=p.data;i.alt='Photo '+n;i.onclick=()=>d.classList.toggle('big');i.onload=()=>{chat.scrollTop=chat.scrollHeight};d.appendChild(i);
     const c=document.createElement('div');c.className='cap';c.textContent='#'+n+(p.cap?' · '+p.cap:'')+' · '+new Date(p.at).toLocaleDateString('en-AU',{day:'numeric',month:'short'});d.appendChild(c)}).catch(()=>{d.textContent='📷 Couldn’t load photo #'+n+'.'})}
 async function photoTags(reply){
@@ -958,7 +958,7 @@ function handleReply(t,reply){
   if((/\[CHECKIN\]/i.test(reply)||/\bL\s*[,\/]?\s*A\s*[,\/]?\s*(?:and\s+)?F\b/.test(reply))&&Date.now()-lafLast>8*60000){lafLast=Date.now();store.set('lafLast',lafLast);setTimeout(showLaf,600)}
   t.classList.remove('typing'); const tx=clean(reply); history.push({who:'them',text:reply,at:Date.now()}); saveHistory();
   if(tx||!showNums(reply).length)t.textContent=tx||'…'; else t.remove();
-  showNums(reply).forEach(n=>picBubble(n));
+  showNums(reply).forEach(n=>picBubble(n,true));
   photoTags(reply);
   const m=reply.match(TAG);
   if(m){const n=(!m[1]||m[1].toLowerCase()==='now')?0:parseFloat(m[1]);const mins=Math.min(2880,Math.round(m[2]&&/^h/i.test(m[2])?n*60:n));setCheck(Date.now()+mins*60000,(m[3]||'front').toLowerCase())}
