@@ -4,6 +4,8 @@
   "main": "helper/worker.js",
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
+  // once a minute: send any photo-check alert that is due
+  "triggers": { "crons": ["* * * * *"] },
   "kv_namespaces": [
     { "binding": "STORE", "id": "4944964e59e145cc8d66d435577f6b9f" }
   ]

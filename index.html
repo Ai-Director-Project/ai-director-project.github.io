@@ -8,6 +8,8 @@
 <meta name="robots" content="noindex,nofollow">
 <title>After Dark</title>
 <link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#140b10">
 <link rel="icon" href="icon.png">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -187,11 +189,13 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
 
     <section>
       <h3>Photo check alerts</h3>
-      <label class="row"><input type="checkbox" id="alertOn" style="accent-color:var(--rose)"> Phone notification when a check is due</label>
+      <label class="row"><input type="checkbox" id="alertOn" style="accent-color:var(--rose)"> Notification when a check is due</label>
+      <div class="row" style="margin-top:8px"><button class="btn primary" id="pushGo">Turn on notifications here</button><button class="btn" id="pushTest" hidden>Send a test</button></div>
+      <p class="empty" id="pushStat" style="margin-top:6px"></p>
       <label class="row" style="margin-top:8px"><input type="checkbox" id="buzzOn" style="accent-color:var(--rose)"> Also a short buzz from the toy</label>
       <label class="row" style="margin-top:8px">Time to take the photo
         <select id="winSec"><option value="0">No limit</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option></select></label>
-      <p class="empty" style="margin-top:6px">Works even if After Dark is closed, for checks up to 35 minutes away. Cancelled when you send the photo or use VOIDLOCK.</p>
+      <p class="empty" style="margin-top:6px">Works even if After Dark is closed. Tap the notification and the camera is ready; your time to take the photo starts then. Cancelled when you send the photo or use VOIDLOCK.</p>
     </section>
 
 
@@ -821,9 +825,22 @@ $('syncGo').onclick=async()=>{try{const p=await (await fetch(HELPER+'/ping')).js
 $('pinGo').onclick=async()=>{const pin=$('pinIn').value.replace(/\D/g,'');if(pin.length!==6){toast('Type all 6 numbers');return}
   try{const r=await fetch(HELPER+'/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});
     if(r.status===403){toast('Those numbers don\u2019t match. Try again.');return}if(r.status===410){toast('Those numbers ran out. Get new ones.');return}if(!r.ok)throw 0;
-    const j=await r.json();await useCode(j.code)}catch(e){toast('Couldn\u2019t reach the sharing helper')}};
+    const j=await r.json();await useCode(j.code);await getCopy()}catch(e){toast('Couldn\u2019t reach the sharing helper')}};
+/* copy photos, chat, settings and key to a newly connected device (the helper keeps it 30 minutes) */
+async function sendCopy(say){const h={'Content-Type':'application/json','X-Code':syncCode};
+  try{for(let i=0;i<photos.length;i++){say('Copying photo '+(i+1)+' of '+photos.length+'\u2026');const d=await blobToData(photos[i].blob);
+      const r=await fetch(HELPER+'/bundle/p/'+i,{method:'PUT',headers:h,body:JSON.stringify(d)});if(!r.ok)throw 0}
+    const meta={app:'afterdark',kind:'copy',keepPhotos:true,settings,persona,history,toys,sess,play,playExtra,key:apiKey,n:photos.length};
+    const r=await fetch(HELPER+'/bundle/meta',{method:'PUT',headers:h,body:JSON.stringify(meta)});if(!r.ok)throw 0;say('Copy ready \u2713')}
+  catch(e){say('(The copy didn\u2019t go through, but connecting still works.)')}}
+async function getCopy(){const h={'X-Code':syncCode};
+  try{const r=await fetch(HELPER+'/bundle/meta',{headers:h});if(!r.ok)return;const data=await r.json();if(!data||data.app!=='afterdark')return;
+    data.photos=[];if(!photos.length){for(let i=0;i<(data.n||0);i++){toast('Copying photo '+(i+1)+' of '+data.n+'\u2026');try{const p=await fetch(HELPER+'/bundle/p/'+i,{headers:h});if(p.ok)data.photos.push(await p.json())}catch(e){}}}
+    else data.keepPhotos=true;
+    await applyData(data)}catch(e){}}
 $('syncAdd').onclick=async()=>{try{const r=await fetch(HELPER+'/pair',{method:'POST',headers:{'X-Code':syncCode}});if(!r.ok)throw 0;const j=await r.json();
-    $('pinBox').hidden=false;$('pinEntry').hidden=true;$('pinShow').hidden=false;$('pinShow').textContent=j.pin;$('pinMsg').textContent='On your other device, tap \u2630 \u2192 Connect this device, then type these numbers (they work for 10 minutes):'}
+    $('pinBox').hidden=false;$('pinEntry').hidden=true;$('pinShow').hidden=false;$('pinShow').textContent=j.pin;const msg='On your other device, tap \u2630 \u2192 Connect this device, then type these numbers (they work for 10 minutes). It gets a copy of your photos, chat, settings and Grok key.';$('pinMsg').textContent=msg+' Getting the copy ready\u2026';
+    await sendCopy(t=>$('pinMsg').textContent=msg+' '+t)}
   catch(e){toast('Couldn\u2019t reach the sharing helper')}};
 document.querySelectorAll('#sheet section').forEach(sec=>{const h=sec.querySelector(':scope>h3');if(!h||/Back up/.test(h.textContent))return;
   h.classList.add('fold');sec.classList.add('shut');h.onclick=()=>{sec.classList.toggle('shut');sec.classList.toggle('open')}});
@@ -847,7 +864,7 @@ $('memCopy').onclick=async()=>{const t=memDump();try{await navigator.clipboard.w
 $('memFeedGo').onclick=()=>feedMem($('memFeed').value);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')catchUp(false)});
 
-const CAPS="\n\nWHAT YOU CAN AND CAN'T ACTUALLY DO (the real limits of this app; never promise or pretend beyond them):\nYOU CAN:\n- Control his Lovense toys with tags: Gemini (vibrating nipple clamps), Hush 2 (vibrating butt plug), Tenera 2 (air-pulse suction toy). Levels 0-20, up to 300 seconds. Gemini also does presets and custom on-toy patterns. You can stop them all.\n- Schedule toy commands for later with AFTER tags, and put a countdown timer on his screen with TIMER tags. These only run while the app is open on his screen.\n- Ask for a photo; he takes it with the camera button and you see it.\n- Ask for feedback with [CHECKIN]; save lessons about him with [NOTE: ...].\n- KEY BOX: Tim's keys can be locked in a key box that belongs to YOU. Tim can no longer open it from his phone; only a one-time code from you opens it (his only other way in is an emergency key kept in his car). To let him out, you MUST put the tag [RELEASE] in your message (just saying 'here's your code' does nothing; you never see or know the code yourself): the app shows him a fresh code (one use, valid 6 hours) and tells you it worked. Whether and when to release is your decision; make him earn it. The box re-locks itself when closed, so to lock him up just tell him to put the keys inside and shut it. Always release straight away if he says he needs the keys for a real emergency, his health or safety.\nYOU CAN'T:\n- See, hear or sense him except through his messages and photos he chooses to send. You don't know what he is doing or wearing unless he tells you.\n- Know a toy actually moved unless the command result says it was done. If results say failed or offline, tell him plainly; don't pretend it worked.\n- Control his ElectraStim Axis e-stim unit. It has only its own modes and an intensity dial, or plays an e-stim audio file he runs in VLC. It can't do timed steps (\"8 seconds low, 12 seconds high\"), and he can't keep turning the dial while keeping his hands off. With the Axis you may only ask simple things: put on an e-stim file, set the dial to a level, go up or down a notch, hold, switch off. Never put pads above the waist.\n- Control the Lush 3, Handy, chastity cage or handcuffs.\n- Undo VOIDLOCK; only he can unlock.\n- Message or buzz him when the app is closed.\n- Remember anything beyond your memory list and the recent chat.\n- Control what other people are doing or where he is.\nIf he asks for something you can't do, say so in one short line and offer what you can do.";
+const CAPS="\n\nWHAT YOU CAN AND CAN'T ACTUALLY DO (the real limits of this app; never promise or pretend beyond them):\nYOU CAN:\n- Control his Lovense toys with tags: Gemini (vibrating nipple clamps), Hush 2 (vibrating butt plug), Tenera 2 (air-pulse suction toy). Levels 0-20, up to 300 seconds. Gemini also does presets and custom on-toy patterns. You can stop them all.\n- Schedule toy commands for later with AFTER tags, and put a countdown timer on his screen with TIMER tags. These only run while the app is open on his screen.\n- Ask for a photo; he takes it with the camera button and you see it.\n- Ask for feedback with [CHECKIN]; save lessons about him with [NOTE: ...].\n- KEY BOX: Tim's keys can be locked in a key box that belongs to YOU. Tim can no longer open it from his phone; only a one-time code from you opens it (his only other way in is an emergency key kept in his car). To let him out, you MUST put the tag [RELEASE] in your message (just saying 'here's your code' does nothing; you never see or know the code yourself): the app shows him a fresh code (one use, valid 6 hours) and tells you it worked. Whether and when to release is your decision; make him earn it. The box re-locks itself when closed, so to lock him up just tell him to put the keys inside and shut it. Always release straight away if he says he needs the keys for a real emergency, his health or safety.\nYOU CAN'T:\n- See, hear or sense him except through his messages and photos he chooses to send. You don't know what he is doing or wearing unless he tells you.\n- Know a toy actually moved unless the command result says it was done. If results say failed or offline, tell him plainly; don't pretend it worked.\n- Control his ElectraStim Axis e-stim unit. It has only its own modes and an intensity dial, or plays an e-stim audio file he runs in VLC. It can't do timed steps (\"8 seconds low, 12 seconds high\"), and he can't keep turning the dial while keeping his hands off. With the Axis you may only ask simple things: put on an e-stim file, set the dial to a level, go up or down a notch, hold, switch off. Never put pads above the waist.\n- Control the Lush 3, Handy, chastity cage or handcuffs.\n- Undo VOIDLOCK; only he can unlock.\n- Message or buzz him when the app is closed. The one exception: when a photo check you scheduled comes due, his phone gets a discreet notification, so photo checks work even if he has the app closed.\n- Remember anything beyond your memory list and the recent chat.\n- Control what other people are doing or where he is.\nIf he asks for something you can't do, say so in one short line and offer what you can do.";
 const ASK_RULES="\n\nHOW YOU ASK (this matters a lot to Tim):\n- Ask, don't guess. You tend to guess; stop. Whenever you're not sure what he has, where he is, what he's wearing, how he's feeling or what he wants, ask.\n- Your questions are flirty and teasing, in character: you're coaxing it out of him, not filling in a form. E.g. 'Tell me what's on that naughty mind right now…', 'What have you got within reach, pet?', 'Who's nearby? I want to know how quiet you'll have to be.'\n- ONE question per message, then stop and wait for his answer. Never stack questions.\n- Before any task, check the one thing you don't already know (what he has to hand, where he is right now, whether he can be heard or seen). Privacy, time left and arousal already come from the session settings; don't ask those again.\n- Build from him: ask what he's thinking about or fantasising about right now, then shape the scene and any task around his answer instead of inventing your own.\n- If he tells you something gets in the way (people around, at work, too sore, toy not charged, not possible), reshape the task to fit; don't drop the mood and never punish him for a real-life limit.\n- If a task turns out impossible the moment he tries, he'll say so: fix it straight away, no fuss. That's information, not failure.\n\nTASK CHOICES:\n- When he asks for a task, usually offer 2 or 3 short options that all fit his privacy, time left, toys and limits. Give each a teasing one-line description, and make them different in flavour: one gentle, one bolder, one wildcard. Then ask him to pick and stop there.\n- Once he picks, his answer is the go-ahead: give the full, clear instructions for that one.\n- Now and then, when it suits the mood, just decide for him instead of offering choices, so it never feels predictable.";
 const TRAIN_RULES="\n\n*** TRAINING MODE IS ON. This overrides your character and session instructions. ***\nTim is teaching you how this app, his toys and his preferences really work, because sessions have gone wrong. For now:\n- Drop the femdom persona. Be warm, plain, attentive and humble, like a new assistant learning the job. No teasing, no roleplay, no tasks, no scenarios, no commands, no timers, no photo requests.\n- Listen. Keep replies short. Ask one clear question when something is unclear. Repeat back what you've understood so he can correct you.\n- Only touch the toys when he explicitly asks you to test one, and then report exactly what the command result said.\n- Each time you learn something lasting (what a toy is, what works, what fails, what he likes, what you must never do), add [NOTE: ...] so it is saved.\n- When he turns training mode off, you go back to your normal self, using everything you learned.";
 async function askGrok(extra){
@@ -898,7 +915,8 @@ async function send(){
 }
 
 /* photo checks */
-let check=store.get('check',null), checkCard=null, tick=null, checkSetAt=store.get('checkSetAt',0);
+let check=store.get('check',null), checkCard=null, tick=null, checkSetAt=store.get('checkSetAt',0), visSince=Date.now();
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')visSince=Date.now()});
 function fmt(ms){const s=Math.max(0,Math.ceil(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
 const ALERT_HOOK='https://hook.eu1.make.com/d8e85t5k2vaeyjwq556lrugd7xfoif3r';
 function alertMake(fields){try{fetch(ALERT_HOOK,{method:'POST',mode:'no-cors',body:new URLSearchParams(fields)}).catch(()=>{})}catch(e){}}
@@ -906,16 +924,21 @@ function setCheck(due,cam){
   const id='ad-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   check={due,cam,id,win:settings.winSec||0};checkSetAt=Date.now();store.set('check',check);store.set('checkSetAt',checkSetAt);renderCheck();
   const delay=Math.round((due-Date.now())/1000);
-  if(settings.alertOn&&delay>=20&&delay<=2100)alertMake({action:'PHOTO_CHECK_START',request_id:id,delay_s:String(delay),buzz:settings.buzzOn?'yes':'no'});
+  if(settings.alertOn&&delay>=20)alertCheck(check,delay);
 }
-function clearCheck(){if(check&&check.id&&check.due>Date.now()-60000)alertMake({action:'PHOTO_CHECK_CANCEL'});check=null;store.set('check',null);if(checkCard){checkCard.remove();checkCard=null}clearInterval(tick);tick=null;$('status').textContent=apiKey?(settings.name||'Vesper')+' · online':'Add your key in ☰';if(typeof sessStatus==='function')sessStatus()}
+/* notifications: the Cloudflare helper sends them to every device that turned them on; the old Make alert is the fallback */
+async function alertCheck(c,delay){let devs=[];
+  if(syncOn()){try{const r=await fetch(HELPER+'/push/check',{method:'POST',headers:{'Content-Type':'application/json','X-Code':syncCode},body:JSON.stringify({id:c.id,due:c.due,cam:c.cam,win:c.win})});if(r.ok)devs=(await r.json()).devs||[]}catch(e){}}
+  if((!devs.includes('iPhone')||settings.buzzOn)&&delay<=2100)alertMake({action:'PHOTO_CHECK_START',request_id:c.id,delay_s:String(delay),buzz:settings.buzzOn?'yes':'no'})}
+function cancelAlert(id){if(syncOn())fetch(HELPER+'/push/cancel',{method:'POST',headers:{'Content-Type':'application/json','X-Code':syncCode},body:JSON.stringify({id})}).catch(()=>{});alertMake({action:'PHOTO_CHECK_CANCEL'})}
+function clearCheck(){if(check&&check.id&&check.due>Date.now()-60000)cancelAlert(check.id);check=null;store.set('check',null);if(checkCard){checkCard.remove();checkCard=null}clearInterval(tick);tick=null;$('status').textContent=apiKey?(settings.name||'Vesper')+' · online':'Add your key in ☰';if(typeof sessStatus==='function')sessStatus()}
 function renderCheck(){
   clearInterval(tick); if(!check)return;
   if(!checkCard){checkCard=document.createElement('div');checkCard.className='checkcard';checkCard.innerHTML='<div class="ck-title"></div><div class="row ck-btns" hidden><button class="btn primary" data-cam="front">Front camera</button><button class="btn primary" data-cam="back">Back camera</button></div>';checkCard.querySelectorAll('button').forEach(b=>b.onclick=()=>openCam(b.dataset.cam));chat.appendChild(checkCard)}
   chat.appendChild(checkCard);
   const upd=()=>{const left=check.due-Date.now();const ready=left<=0;
-    const win=check.win||0, winLeft=win?check.due+win*1000-Date.now():0;
-    if(ready&&win&&!check.camAt&&winLeft<=0){missCheck();return}
+    const win=check.win||0, winLeft=win?Math.max(check.due,check.seenAt||0)+win*1000-Date.now():0;
+    if(ready&&win&&!check.camAt&&winLeft<=0){if(document.visibilityState==='visible'&&Date.now()-visSince>2500){missCheck();return}}
     checkCard.querySelector('.ck-title').textContent=ready?('📷 Photo check: '+(settings.name||'Vesper')+' wants to see. '+(win&&!check.camAt?Math.ceil(winLeft/1000)+'s left!':'Take it now.')):'📷 Photo check in '+fmt(left);
     checkCard.querySelector('.ck-btns').hidden=!ready; checkCard.classList.toggle('ready',ready);
     checkCard.querySelectorAll('button').forEach(b=>b.classList.toggle('primary',b.dataset.cam===check.cam));
@@ -934,7 +957,7 @@ async function missCheck(){
   busy=false;
 }
 function openCam(cam){if(!apiKey){toast('Add your Grok key in ☰ first');return}
-  if(check&&check.due<=Date.now()&&check.win&&!check.camAt){if(check.due+check.win*1000<Date.now()){missCheck();return}check.camAt=Date.now();store.set('check',check)}$(cam==='back'?'camBack':'camFront').click()}
+  if(check&&check.due<=Date.now()&&check.win&&!check.camAt){if(Math.max(check.due,check.seenAt||0)+check.win*1000<Date.now()){missCheck();return}check.camAt=Date.now();store.set('check',check)}$(cam==='back'?'camBack':'camFront').click()}
 function shrinkData(file,max){return new Promise((res,rej)=>{const img=new Image();const u=URL.createObjectURL(file);img.onload=()=>{let w=img.naturalWidth,h=img.naturalHeight;const s=Math.min(1,max/Math.max(w,h));w=Math.round(w*s);h=Math.round(h*s);const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.8))};img.onerror=()=>{URL.revokeObjectURL(u);rej()};img.src=u})}
 async function sendPhoto(file,cam){
   if(!file||busy)return;
@@ -976,6 +999,43 @@ $('nextBtn').onclick=()=>{if(!urls.length){toast('Add photos in ☰ first');retu
 function setPhotos(on){settings.photosOn=on;store.set('photosOn',on);$('photosOn').checked=on;pos=Math.max(-1,pos-1);next()}
 $('photosOn').checked=settings.photosOn;$('photosOn').onchange=e=>setPhotos(e.target.checked);
 $('alertOn').checked=settings.alertOn;$('alertOn').onchange=e=>{settings.alertOn=e.target.checked;store.set('alertOn',settings.alertOn)};
+/* notifications on this device */
+const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const isApp=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const canPush='serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+const devId=store.get('devId','')||(()=>{const d=newCode().slice(0,12);store.set('devId',d);return d})();
+const devName=isIOS?'iPhone':/Android/.test(navigator.userAgent)?'Android':'Other';
+function unb64u(t){t=t.replace(/-/g,'+').replace(/_/g,'/');while(t.length%4)t+='=';return Uint8Array.from(atob(t),c=>c.charCodeAt(0))}
+function pushShow(msg){const on=store.get('pushOn',false)&&canPush&&Notification.permission==='granted';
+  let t=msg||'';const go=$('pushGo');go.hidden=false;$('pushTest').hidden=!on;go.textContent=on?'Turn on again':'Turn on notifications here';
+  if(!msg){if(isIOS&&!isApp){t='On iPhone, notifications only work in the home-screen app. In Chrome tap the Share button (square with an arrow), then Add to Home Screen, then open After Dark from that new icon.';go.hidden=true}
+    else if(!canPush){t='This browser can’t show notifications.';go.hidden=true}
+    else if(!syncOn())t='First connect this device: ☰ → Her long-term memory → Connect this device.';
+    else if(Notification.permission==='denied')t='Notifications are blocked for After Dark. Turn them on in your phone’s Settings → Notifications.';
+    else t=on?'On for this device ✓':'Off on this device.'}
+  $('pushStat').textContent=t}
+async function pushSub(ask){const reg=await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub){if(!ask)return false;const k=await (await fetch(HELPER+'/push/key')).json();sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:unb64u(k.key)})}
+  const r=await fetch(HELPER+'/push/sub',{method:'PUT',headers:{'Content-Type':'application/json','X-Code':syncCode},body:JSON.stringify({sub:sub.toJSON(),dev:devName,id:devId})});
+  if(!r.ok)throw 0;store.set('pushOn',true);return true}
+$('pushGo').onclick=async()=>{if(!syncOn()){pushShow();return}
+  try{const perm=await Notification.requestPermission();if(perm!=='granted'){pushShow();return}
+    pushShow('Turning on…');await pushSub(true);if(!settings.alertOn){settings.alertOn=true;store.set('alertOn',true);$('alertOn').checked=true}
+    pushShow();toast('Notifications on for this device')}
+  catch(e){pushShow('Couldn’t turn them on just now. Try again in a moment.')}};
+$('pushTest').onclick=async()=>{try{const r=await fetch(HELPER+'/push/test',{method:'POST',headers:{'X-Code':syncCode}});const j=await r.json();toast(j.sent?'Test sent to '+j.sent+' device'+(j.sent>1?'s':''):'No devices answered. Tap Turn on again.')}catch(e){toast('Couldn’t reach the sharing helper')}};
+pushShow();
+if(canPush){navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if(syncOn()&&store.get('pushOn',false)&&Notification.permission==='granted')pushSub(false).catch(()=>{});
+  navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&'check' in e.data)alertOpened(e.data.check)})}
+/* he tapped a notification: show the camera and start his photo time now */
+async function alertOpened(id){if(!id)return;if(id==='test'){toast('Notifications are working ✓');return}
+  if(!(check&&check.id===id)&&syncOn()){try{const l=await (await fetch(HELPER+'/push/check',{headers:{'X-Code':syncCode}})).json();
+      if(l&&l.id===id&&!check){check={id:l.id,due:l.due,cam:l.cam||'front',win:l.win||0};checkSetAt=Date.now();store.set('checkSetAt',checkSetAt)}}catch(e){}}
+  if(!check||check.id!==id)return;
+  if(check.due<=Date.now()&&!check.camAt)check.seenAt=Date.now();store.set('check',check);visSince=Date.now();renderCheck()}
+{const q=new URLSearchParams(location.search).get('check');if(q){window.history.replaceState(null,'',location.pathname);if(check&&check.id===q&&check.due<=Date.now()&&!check.camAt){check.seenAt=Date.now();store.set('check',check)}setTimeout(()=>alertOpened(q),0)}}
 $('winSec').value=String(settings.winSec);$('winSec').onchange=e=>{settings.winSec=+e.target.value;store.set('winSec',settings.winSec)};
 $('buzzOn').checked=settings.buzzOn;$('buzzOn').onchange=e=>{settings.buzzOn=e.target.checked;store.set('buzzOn',settings.buzzOn)};
 $('avatar').onclick=()=>{setPhotos(!settings.photosOn);toast(settings.photosOn?'Photos on':'Photos off')};
@@ -1029,9 +1089,11 @@ $('restoreFile').addEventListener('change',async e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
   let data;try{data=JSON.parse(await f.text())}catch(err){toast('That file isn’t an After Dark backup.');return}
   if(!data||data.app!=='afterdark'){toast('That file isn’t an After Dark backup.');return}
-  toast('Restoring…');
-  if(Array.isArray(data.photos)&&db){for(const p of photos)await delPhoto(p.id);for(const d of data.photos){try{await addPhoto(await dataToBlob(d))}catch(err){}}}
-  if(data.settings){settings=Object.assign(settings,data.settings);['onReply','onOpen','onTimer','minutes','shuffle','dim','blur','name','photosOn','bubbleA','solo'].forEach(k=>store.set(k,settings[k]))}
+  toast('Restoring…');await applyData(data);
+});
+async function applyData(data){
+  if(Array.isArray(data.photos)&&db&&!(data.keepPhotos&&photos.length)){for(const p of photos)await delPhoto(p.id);for(const d of data.photos){try{await addPhoto(await dataToBlob(d))}catch(err){}}}
+  if(data.settings){settings=Object.assign(settings,data.settings);['onReply','onOpen','onTimer','minutes','shuffle','dim','blur','name','photosOn','bubbleA','solo','alertOn','buzzOn','winSec','adaCtl'].forEach(k=>store.set(k,settings[k]))}
   if(data.play&&typeof data.play==='object'){play=data.play;playExtra=Array.isArray(data.playExtra)?data.playExtra:[];savePlay()}
   if(typeof data.profile==='string'){adaMem=data.profile;(store.set('profile',adaMem),store.set('profileAt',Date.now()),syncSoon());$('adaMem').value=adaMem}
   if(data.kind==='cleanup'){applyCleanup(data);return}
@@ -1043,8 +1105,9 @@ $('restoreFile').addEventListener('change',async e=>{
   [['m-reply','onReply'],['m-open','onOpen'],['m-timer','onTimer']].forEach(([id,k])=>$(id).checked=!!settings[k]);$('bubbleA').value=settings.bubbleA;$('solo').checked=settings.solo;
   $('minutes').value=String(settings.minutes);$('shuffle').checked=settings.shuffle;$('dim').value=settings.dim;$('blur').value=settings.blur;$('nameInput').value=settings.name;$('photosOn').checked=settings.photosOn;
   applyLook();applyTimer();await refresh();next();
-  toast(data.kind==='profile'?'Her profile loaded':'Restored '+photos.length+' photos and your chat');
-});
+  if(data.key&&!apiKey){apiKey=data.key;store.set('key',apiKey);$('apiKey').value=apiKey;$('status').textContent=(settings.name||'Vesper')+' · online'}
+  toast(data.kind==='profile'?'Her profile loaded':data.kind==='copy'?'Copied '+photos.length+' photos, your chat and settings':'Restored '+photos.length+' photos and your chat');
+}
 
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&settings.onOpen)next()});
 

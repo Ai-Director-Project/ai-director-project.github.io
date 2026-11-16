@@ -1,9 +1,13 @@
 // After Dark helper: keeps the chat in sync between devices and can hold the Grok key.
 // No secrets live in this file. The first device to set a sync code claims it; it is kept in Cloudflare storage.
+import { vapidKeys, pushAll, duePush } from "./push.js";
 const ORIGIN = "https://ai-director-project.github.io";
 
 export default {
-  async fetch(req, env) {
+  async scheduled(event, env, ctx) {
+    if (env.STORE) ctx.waitUntil(duePush(env));
+  },
+  async fetch(req, env, ctx) {
     const cors = {
       "Access-Control-Allow-Origin": ORIGIN,
       "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
@@ -20,6 +24,7 @@ export default {
     const sent = req.headers.get("X-Code") || "";
 
     if (path === "/" || path === "/ping") return reply({ ok: true, claimed: !!saved });
+    if (path === "/push/key") return reply({ key: (await vapidKeys(env)).pub });
 
     if (path === "/claim" && req.method === "POST") {
       if (sent.length < 8) return reply({ error: "code too short" }, 400);
@@ -100,6 +105,59 @@ export default {
         body: await req.text()
       });
       return new Response(r.body, { status: r.status, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+    // phone notifications for photo checks
+    if (path === "/push/sub" && req.method === "PUT") {
+      const b = await req.json().catch(() => ({}));
+      const s = b.sub;
+      if (!s || typeof s.endpoint !== "string" || !s.endpoint.startsWith("https://") || !s.keys || !s.keys.p256dh || !s.keys.auth) return reply({ error: "bad subscription" }, 400);
+      const subs = ((await env.STORE.get("subs", "json")) || []).filter(x => x.endpoint !== s.endpoint && (!b.dev || x.dev !== b.dev || x.id !== b.id));
+      subs.push({ endpoint: s.endpoint, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth }, dev: String(b.dev || "").slice(0, 40), id: String(b.id || "").slice(0, 40), at: Date.now() });
+      await env.STORE.put("subs", JSON.stringify(subs.slice(-10)));
+      return reply({ ok: true, subs: subs.length });
+    }
+    if (path === "/push/unsub" && req.method === "POST") {
+      const b = await req.json().catch(() => ({}));
+      const subs = ((await env.STORE.get("subs", "json")) || []).filter(x => x.endpoint !== b.endpoint && (!b.id || x.id !== b.id));
+      await env.STORE.put("subs", JSON.stringify(subs));
+      return reply({ ok: true, subs: subs.length });
+    }
+    if (path === "/push/test" && req.method === "POST") {
+      const sent = await pushAll(env, { title: "Reminder", body: "\u2705 Notifications are working", id: "test" });
+      return reply({ ok: true, sent });
+    }
+    if (path === "/push/check" && req.method === "POST") {
+      const b = await req.json().catch(() => ({}));
+      const due = +b.due || 0;
+      if (!b.id || !due || due < Date.now() - 60000 || due > Date.now() + 6 * 3600000) return reply({ error: "bad check" }, 400);
+      const c = { id: String(b.id).slice(0, 40), due, cam: b.cam === "back" ? "back" : "front", win: +b.win || 0 };
+      await env.STORE.put("pchk", JSON.stringify(c));
+      await env.STORE.put("lastchk", JSON.stringify(c), { expirationTtl: 7 * 3600 });
+      const subs = (await env.STORE.get("subs", "json")) || [];
+      return reply({ ok: true, subs: subs.length, devs: subs.map(x => x.dev) });
+    }
+    if (path === "/push/check" && req.method === "GET") {
+      return reply((await env.STORE.get("lastchk", "json")) || {});
+    }
+    if (path === "/push/cancel" && req.method === "POST") {
+      const b = await req.json().catch(() => ({}));
+      const c = await env.STORE.get("pchk", "json");
+      if (c && (!b.id || c.id === b.id)) await env.STORE.delete("pchk");
+      const l = await env.STORE.get("lastchk", "json");
+      if (l && (!b.id || l.id === b.id)) await env.STORE.delete("lastchk");
+      return reply({ ok: true });
+    }
+
+    // copy everything to a newly connected device (kept 30 minutes)
+    const bm = path.match(/^\/bundle\/(meta|p\/(\d{1,3}))$/);
+    if (bm && req.method === "PUT") {
+      await env.STORE.put("bundle:" + (bm[2] || "meta"), await req.text(), { expirationTtl: 1800 });
+      return reply({ ok: true });
+    }
+    if (bm && req.method === "GET") {
+      const v = await env.STORE.get("bundle:" + (bm[2] || "meta"));
+      if (v === null) return reply({ error: "none" }, 404);
+      return new Response(v, { headers: { ...cors, "Content-Type": "application/json" } });
     }
     return reply({ error: "not found" }, 404);
   }
