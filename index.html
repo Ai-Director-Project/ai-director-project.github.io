@@ -52,6 +52,7 @@ header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-top:c
 .chat.solo .note.fresh{display:block}
 .msg,.note{transition:opacity .8s ease}
 .chat.hush .msg,.chat.hush .note{opacity:0;pointer-events:none}
+.chat.hush .note.keycode{opacity:1;pointer-events:auto}
 .note{align-self:center;font-size:12px;color:var(--ink-soft);background:rgba(20,8,14,.6);padding:4px 10px;border-radius:999px;text-align:center}
 .typing{opacity:.7;font-style:italic}
 .composer{display:flex;gap:8px;align-items:flex-end;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:rgba(20,8,14,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line)}
@@ -521,7 +522,7 @@ const RELEASE_HOOK='https://hook.eu1.make.com/nl9ritif9ia3f6ydluv7rw4yroxu258w',
 let lastRelease=0;
 async function runRelease(){if(Date.now()-lastRelease<120000)return;lastRelease=Date.now();note('\uD83D\uDD11 Vesper is releasing the key box\u2026');
   let code='';try{const r=await fetch(RELEASE_HOOK,{method:'POST',body:new URLSearchParams({key:RELEASE_KEY})});const j=JSON.parse(await r.text());code=(j.code||'').trim()}catch(e){}
-  if(/^\d{4,10}$/.test(code)){store.set('lastCode',{code,at:Date.now()});note('\uD83D\uDD11 Key box code: '+code+'  then #  (one use only, within 6 hours)');toast('Key box code: '+code);
+  if(/^\d{4,10}$/.test(code)){store.set('lastCode',{code,at:Date.now()});note('\uD83D\uDD11 Key box code: '+code+'  then #  (one use only, within 6 hours)');chat.lastElementChild.classList.add('keycode');toast('Key box code: '+code);
     history.push({who:'me',hide:true,text:'[The app: your release worked. Tim has been shown a one-time key box code.]'});saveHistory()}
   else{lastRelease=0;note('\u26A0\uFE0F The key box release didn\u2019t work. Tell Vesper to try again.');
     history.push({who:'me',hide:true,text:'[The app: your key box release FAILED, no code was given. Try [RELEASE] again.]'});saveHistory()}}
@@ -1051,7 +1052,7 @@ $('status').textContent=apiKey?(settings.name||'Vesper')+' · online':'Add your 
 if(check)renderCheck();
 sessStatus();
 startLater();
-{const lc=store.get('lastCode',null);if(lc&&lc.code&&Date.now()-lc.at<6*3600000){const d=document.createElement('div');d.className='note';d.style.cssText='font-size:1.3em;font-weight:600;opacity:1';d.textContent='\uD83D\uDD11 Key box code: '+lc.code+'  then #  (one use, until '+new Date(lc.at+6*3600000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+')';chat.appendChild(d);chat.scrollTop=chat.scrollHeight}}
+{const lc=store.get('lastCode',null);if(lc&&lc.code&&Date.now()-lc.at<6*3600000){const d=document.createElement('div');d.className='note keycode';d.style.cssText='font-size:1.3em;font-weight:600;opacity:1';d.textContent='\uD83D\uDD11 Key box code: '+lc.code+'  then #  (one use, until '+new Date(lc.at+6*3600000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+')';chat.appendChild(d);chat.scrollTop=chat.scrollHeight}}
 </script>
 </body>
 </html>
