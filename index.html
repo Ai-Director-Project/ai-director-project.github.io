@@ -45,6 +45,8 @@ header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-top:c
 .iconbtn{background:none;border:1px solid var(--line);color:var(--ink);width:40px;height:40px;border-radius:50%;font-size:18px;cursor:pointer}
 .iconbtn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
 .chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.msg.pic{padding:6px;max-width:72%}.msg.pic img{display:block;width:100%;border-radius:14px;cursor:zoom-in}.msg.pic .cap{font-size:13px;opacity:.85;padding:6px 6px 2px}.msg.pic.big{max-width:100%}
+#phGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}#phGrid figure{margin:0;position:relative}#phGrid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}#phGrid figcaption{font-size:11px;opacity:.8;margin-top:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .msg{max-width:80%;padding:10px 14px;border-radius:18px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;min-width:0}
 .msg{text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 8px rgba(0,0,0,.6)}
 .them{align-self:flex-start;background:rgba(20,8,14,var(--ba));border:1px solid var(--line);border-bottom-left-radius:6px}
@@ -196,6 +198,14 @@ select{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--
       <label class="row" style="margin-top:8px">Time to take the photo
         <select id="winSec"><option value="0">No limit</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option></select></label>
       <p class="empty" style="margin-top:6px">Works even if After Dark is closed. Tap the notification and the camera is ready; your time to take the photo starts then. Cancelled when you send the photo or use VOIDLOCK.</p>
+    </section>
+
+    <section>
+      <h3>Her photo collection</h3>
+      <p class="empty" id="phStat">Check-in photos Vesper chose to keep. She can show you them in the chat.</p>
+      <div class="row" style="margin-top:8px"><button class="btn" id="phView">Show the collection</button></div>
+      <div id="phGrid" hidden></div>
+      <p class="empty" id="phHint" hidden style="margin-top:6px">Tap a photo to delete it.</p>
     </section>
 
 
@@ -460,8 +470,9 @@ let hushT=null;
 function wake(){chat.classList.remove('hush');clearTimeout(hushT);const sec=+(store.get('hideSec',0));if(sec)hushT=setTimeout(()=>{if(!busy&&document.activeElement!==$('input'))chat.classList.add('hush')},sec*1000)}
 chat.addEventListener('click',wake);$('input').addEventListener('focus',wake);
 const TAG=/\[PHOTO(?:\s+(now|\d{1,4}(?:\.\d+)?))?(?:\s*(h|hr|hrs|hours?|m|min|mins|minutes?)\b)?(?:\s+(front|back))?\s*\]/i;
-function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*|TIMER [^\]]*|AFTER [^\]]*|RELEASE)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
-history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'));
+function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*|TIMER [^\]]*|AFTER [^\]]*|RELEASE|KEEP(?::[^\]]*)?|SHOW[ #0-9,]*|DROP[ #0-9,]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
+function renderMsg(m){const tx=clean(m.text);if(tx||m.who==='me'||!showNums(m.text).length)bubble(tx||'…',m.who==='me'?'me':'them');if(m.who!=='me')showNums(m.text).forEach(n=>picBubble(n))}
+history.filter(m=>!m.hide).forEach(renderMsg);
 function saveHistory(){const cut=history.length-60;if(cut>0){const lost=history.slice(0,cut);if(lost.some(m=>!m.dg)&&typeof catchUp==='function')catchUp(true,lost)}history=history.slice(-60);store.set('history',history)}
 const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, then front or back camera) or [PHOTO 8h back] (hours from now). Anything from now up to 48 hours ahead works: his phone gets a notification when it's due even if the app is closed, so you can check on him through the day or overnight. Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a check comes due he only has a short window to take the photo; if he misses it the page will tell you. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
 /* toy bridge (Make) */
@@ -874,7 +885,7 @@ function nowText(){const d=new Date();
   if(prev){const gap=(Date.now()-prev.at)/60000;if(gap>=20)t+=' The previous message in this chat was '+fmtMins(gap)+' ago, so time has passed since then.'}
   return t}
 async function askGrok(extra){
-  const msgs=[{role:'system',content:(store.get('train',false)?TRAIN_RULES+'\n\n(Her normal character, for reference only while training:)\n':'')+(persona||DEFAULT_PERSONA)+memPrompt()+CAPS+(store.get('train',false)?'':ASK_RULES)+PHOTO_RULES+sessPrompt()+(store.get('train',false)?TRAIN_RULES:'')}].concat(history.slice(-KEEP).map(m=>({role:m.who==='me'?'user':'assistant',content:m.text})));
+  const msgs=[{role:'system',content:(store.get('train',false)?TRAIN_RULES+'\n\n(Her normal character, for reference only while training:)\n':'')+(persona||DEFAULT_PERSONA)+memPrompt()+CAPS+(store.get('train',false)?'':ASK_RULES)+PHOTO_RULES+collPrompt()+sessPrompt()+(store.get('train',false)?TRAIN_RULES:'')}].concat(history.slice(-KEEP).map(m=>({role:m.who==='me'?'user':'assistant',content:m.text})));
   msgs[0].content+=nowText();
   if(extra)msgs.push(extra);
   const call=async model=>fetch('https://api.x.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},body:JSON.stringify({model,messages:msgs,max_tokens:600})});
@@ -899,9 +910,42 @@ $('lafX').onclick=hideLaf;
 $('lafSend').onclick=()=>{const l=$('lafL').value,a=$('lafA').value;sess.aro=+a;store.set('sess',sess);hideLaf();$('input').value='My feedback: liked it '+l+' out of 10, arousal '+a+' out of 10'+(lafF?', did the task: '+({Y:'yes',P:'partly',N:'no'})[lafF]:'')+'.';send()};
 $('fbBtn').onclick=()=>{if($('laf').hidden)showLaf();else hideLaf()};
 let lafLast=store.get('lafLast',0);
+/* Vesper's photo collection: [KEEP: caption] keeps the photo just sent, [SHOW 3] shows #3 in the chat, [DROP 3] deletes it */
+let lastPhoto=null, phIdx=store.get('phIdx',[]); const phCache={};
+function showNums(t){const out=[];String(t||'').replace(/\[SHOW\s*#?\s*([0-9 ,#]+)\]/gi,(x,l)=>{l.split(/[ ,#]+/).forEach(v=>{const n=parseInt(v,10);if(n>0&&!out.includes(n)&&out.length<4)out.push(n)})});return out}
+function phHead(){return{'Content-Type':'application/json','X-Code':syncCode}}
+async function phRefresh(){if(!syncOn())return;try{const r=await fetch(HELPER+'/photos',{headers:phHead()});if(r.ok){phIdx=await r.json();store.set('phIdx',phIdx);phStat()}}catch(e){}}
+async function phGet(n){if(phCache[n])return phCache[n];const r=await fetch(HELPER+'/photos/'+n,{headers:phHead()});if(!r.ok)return null;return phCache[n]=await r.json()}
+function picBubble(n){const d=document.createElement('div');d.className='msg them pic';d.textContent='📷 Photo #'+n+'…';chat.appendChild(d);markLatest();chat.scrollTop=chat.scrollHeight;
+  new Promise(r=>setTimeout(r,0)).then(()=>syncOn()?phGet(n):null).then(p=>{if(!p){d.textContent='📷 Photo #'+n+' isn’t in her collection.';return}
+    d.textContent='';const i=new Image();i.src=p.data;i.alt='Photo '+n;i.onclick=()=>d.classList.toggle('big');i.onload=()=>{chat.scrollTop=chat.scrollHeight};d.appendChild(i);
+    const c=document.createElement('div');c.className='cap';c.textContent='#'+n+(p.cap?' · '+p.cap:'')+' · '+new Date(p.at).toLocaleDateString('en-AU',{day:'numeric',month:'short'});d.appendChild(c)}).catch(()=>{d.textContent='📷 Couldn’t load photo #'+n+'.'})}
+async function photoTags(reply){
+  const k=reply.match(/\[KEEP(?::\s*([^\]]*))?\]/i);
+  if(k){if(!lastPhoto||!syncOn()){history.push({who:'me',hide:true,text:'[The app: nothing was kept, there is no new photo to keep'+(syncOn()?'':' (this device isn’t connected)')+'.]'});saveHistory()}
+    else{try{const r=await fetch(HELPER+'/photos',{method:'POST',headers:phHead(),body:JSON.stringify({data:lastPhoto.data,cap:(k[1]||'').trim(),at:lastPhoto.at,cam:lastPhoto.cam})});const e=await r.json();
+      if(!r.ok)throw e;phCache[e.n]={...e,data:lastPhoto.data};lastPhoto=null;history.push({who:'me',hide:true,text:'[The app: you kept that photo as #'+e.n+(e.cap?' "'+e.cap+'"':'')+'.]'});saveHistory();toast('Vesper kept photo #'+e.n);phRefresh()}
+    catch(e){history.push({who:'me',hide:true,text:'[The app: keeping the photo FAILED'+(e&&e.error==='collection full'?' (your collection is full, drop some first)':'')+'.]'});saveHistory()}}}
+  const dr=reply.match(/\[DROP\s*#?\s*([0-9 ,#]+)\]/i);
+  if(dr&&syncOn()){for(const v of dr[1].split(/[ ,#]+/)){const n=parseInt(v,10);if(n>0){try{await fetch(HELPER+'/photos/drop',{method:'POST',headers:phHead(),body:JSON.stringify({n})});delete phCache[n]}catch(e){}}}phRefresh()}
+}
+function collPrompt(){const w=n=>n.cap?'"'+n.cap+'"':'(no caption)';
+  const list=phIdx.slice(-60).map(p=>'#'+p.n+' '+w(p)+' ('+new Date(p.at).toLocaleDateString('en-AU',{day:'numeric',month:'short'})+', '+p.cam+')').join('; ');
+  return "\n\nYOUR PHOTO COLLECTION: you control a private collection of Tim's check-in photos. After he sends a photo you may keep it by adding [KEEP: short caption] to your reply (only the photo he just sent can be kept). Show him one or more in the chat any time with [SHOW 3] or [SHOW 3, 7]; they appear as your message. Delete with [DROP 3]. Use it the way a keyholder would: keep the good ones as evidence or trophies, bring them out to tease, compare or remind him. You only know each photo by its number and caption, so write captions that tell you what it shows. "+(phIdx.length?'You have '+phIdx.length+': '+list+'.':'It is empty so far.')}
+function phStat(){$('phStat').textContent=phIdx.length?'Vesper has kept '+phIdx.length+' photo'+(phIdx.length>1?'s':'')+'. She can show you them in the chat.':'Check-in photos Vesper chose to keep. She can show you them in the chat. None yet.'}
+phStat();phRefresh();
+$('phView').onclick=async()=>{const g=$('phGrid');if(!g.hidden){g.hidden=true;$('phHint').hidden=true;$('phView').textContent='Show the collection';return}
+  if(!syncOn()){toast('Connect this device first (Her long-term memory)');return}
+  await phRefresh();g.innerHTML='';g.hidden=false;$('phHint').hidden=!phIdx.length;$('phView').textContent='Hide the collection';if(!phIdx.length){g.textContent='Nothing kept yet.';return}
+  for(const e of phIdx.slice().reverse()){const f=document.createElement('figure');const i=new Image();i.alt='Photo '+e.n;const c=document.createElement('figcaption');c.textContent='#'+e.n+' '+(e.cap||'');f.append(i,c);g.appendChild(f);
+    phGet(e.n).then(p=>{if(p)i.src=p.data});
+    i.onclick=async()=>{if(!confirm('Delete photo #'+e.n+' from her collection?'))return;try{await fetch(HELPER+'/photos/drop',{method:'POST',headers:phHead(),body:JSON.stringify({n:e.n})});delete phCache[e.n];f.remove();history.push({who:'me',hide:true,text:'[The app: Tim deleted photo #'+e.n+' from your collection.]'});saveHistory();phRefresh()}catch(err){toast('Couldn’t delete it just now')}}}};
 function handleReply(t,reply){
   if((/\[CHECKIN\]/i.test(reply)||/\bL\s*[,\/]?\s*A\s*[,\/]?\s*(?:and\s+)?F\b/.test(reply))&&Date.now()-lafLast>8*60000){lafLast=Date.now();store.set('lafLast',lafLast);setTimeout(showLaf,600)}
-  t.classList.remove('typing'); t.textContent=clean(reply)||'…'; history.push({who:'them',text:reply,at:Date.now()}); saveHistory();
+  t.classList.remove('typing'); const tx=clean(reply); history.push({who:'them',text:reply,at:Date.now()}); saveHistory();
+  if(tx||!showNums(reply).length)t.textContent=tx||'…'; else t.remove();
+  showNums(reply).forEach(n=>picBubble(n));
+  photoTags(reply);
   const m=reply.match(TAG);
   if(m){const n=(!m[1]||m[1].toLowerCase()==='now')?0:parseFloat(m[1]);const mins=Math.min(2880,Math.round(m[2]&&/^h/i.test(m[2])?n*60:n));setCheck(Date.now()+mins*60000,(m[3]||'front').toLowerCase())}
   if(settings.onReply)next();
@@ -969,6 +1013,7 @@ function shrinkData(file,max){return new Promise((res,rej)=>{const img=new Image
 async function sendPhoto(file,cam){
   if(!file||busy)return;
   let data;try{data=await shrinkData(file,1280)}catch(e){toast('Couldn’t read that photo. Try again.');return}
+  lastPhoto={data,at:Date.now(),cam};
   busy=true; const wasCheck=!!check; const mins=wasCheck&&checkSetAt?Math.round((Date.now()-checkSetAt)/60000):null;
   bubble('📷 Photo sent','me'); const t=bubble((settings.name||'Vesper')+' is looking…','them typing');
   const info=(wasCheck?'Here is my photo for the photo check':'Here is a photo')+' ('+(cam==='back'?'back':'front')+' camera'+(mins!==null?', '+mins+' min after you set the check':'')+'). Check it carefully.';
@@ -1108,7 +1153,7 @@ async function applyData(data){
   if(Array.isArray(data.notes)&&(data.kind!=='profile'||!notes.length)){notes=data.notes;(store.set('notes',notes),store.set('notesAt',Date.now()),syncSoon());renderNotes()}
   if(Array.isArray(data.toys)){if(data.kind==='profile'){data.toys.forEach(t=>{if(!toys.some(x=>x.n.toLowerCase()===t.n.toLowerCase()))toys.push(t)});saveToys()}else{toys=data.toys;saveToys()}}if(data.sess){sess=data.sess;store.set('sess',sess)}
   if(typeof data.persona==='string'){persona=data.persona;store.set('persona',persona);$('persona').value=persona}
-  if(Array.isArray(data.history)){history=data.history;saveHistory();chat.innerHTML='';history.filter(m=>!m.hide).forEach(m=>bubble(clean(m.text),m.who==='me'?'me':'them'))}
+  if(Array.isArray(data.history)){history=data.history;saveHistory();chat.innerHTML='';history.filter(m=>!m.hide).forEach(renderMsg)}
   [['m-reply','onReply'],['m-open','onOpen'],['m-timer','onTimer']].forEach(([id,k])=>$(id).checked=!!settings[k]);$('bubbleA').value=settings.bubbleA;$('solo').checked=settings.solo;
   $('minutes').value=String(settings.minutes);$('shuffle').checked=settings.shuffle;$('dim').value=settings.dim;$('blur').value=settings.blur;$('nameInput').value=settings.name;$('photosOn').checked=settings.photosOn;
   applyLook();applyTimer();await refresh();next();

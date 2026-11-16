@@ -148,6 +148,40 @@ export default {
       return reply({ ok: true });
     }
 
+    // Vesper's photo collection (check-in photos she chose to keep)
+    if (path === "/photos" && req.method === "GET") {
+      return reply((await env.STORE.get("phidx", "json")) || []);
+    }
+    if (path === "/photos" && req.method === "POST") {
+      const b = await req.json().catch(() => ({}));
+      if (typeof b.data !== "string" || !b.data.startsWith("data:image/") || b.data.length > 8000000) return reply({ error: "bad photo" }, 400);
+      const idx = (await env.STORE.get("phidx", "json")) || [];
+      if (idx.length >= 300) return reply({ error: "collection full" }, 400);
+      const n = idx.reduce((m, x) => Math.max(m, x.n), 0) + 1;
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      await env.STORE.put("ph:" + id, b.data);
+      const e = { n, id, cap: String(b.cap || "").slice(0, 120), at: +b.at || Date.now(), cam: b.cam === "back" ? "back" : "front" };
+      idx.push(e);
+      await env.STORE.put("phidx", JSON.stringify(idx));
+      return reply(e);
+    }
+    const pm = path.match(/^\/photos\/(\d{1,4})$/);
+    if (pm && req.method === "GET") {
+      const e = ((await env.STORE.get("phidx", "json")) || []).find(x => x.n === +pm[1]);
+      const data = e && (await env.STORE.get("ph:" + e.id));
+      if (!data) return reply({ error: "no such photo" }, 404);
+      return reply({ ...e, data });
+    }
+    if (path === "/photos/drop" && req.method === "POST") {
+      const b = await req.json().catch(() => ({}));
+      const idx = (await env.STORE.get("phidx", "json")) || [];
+      const e = idx.find(x => x.n === +b.n);
+      if (!e) return reply({ error: "no such photo" }, 404);
+      await env.STORE.delete("ph:" + e.id);
+      await env.STORE.put("phidx", JSON.stringify(idx.filter(x => x !== e)));
+      return reply({ ok: true });
+    }
+
     // copy everything to a newly connected device (kept 30 minutes)
     const bm = path.match(/^\/bundle\/(meta|p\/(\d{1,3}))$/);
     if (bm && req.method === "PUT") {
