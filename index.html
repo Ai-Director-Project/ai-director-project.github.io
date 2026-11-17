@@ -891,7 +891,7 @@ async function askGrok(extra){
   const msgs=[{role:'system',content:(store.get('train',false)?TRAIN_RULES+'\n\n(Her normal character, for reference only while training:)\n':'')+(persona||DEFAULT_PERSONA)+memPrompt()+CAPS+(store.get('train',false)?'':ASK_RULES)+PHOTO_RULES+collPrompt()+sessPrompt()+(store.get('train',false)?TRAIN_RULES:'')}].concat(history.slice(-KEEP).map(m=>({role:m.who==='me'?'user':'assistant',content:m.text})));
   msgs[0].content+=nowText();
   if(extra)msgs.push(extra);
-  const call=async model=>fetch('https://api.x.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},body:JSON.stringify({model,messages:msgs,max_tokens:model===THINK_MODEL?4000:600})});
+  const call=async model=>fetch('https://api.x.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},body:JSON.stringify({model,messages:msgs,max_tokens:model===THINK_MODEL?8000:600,...(model===THINK_MODEL?{reasoning_effort:'medium'}:{})})});
   let r=await call(THINK_MODEL);if(!r.ok&&r.status!==401)r=await call(MODEL);
   if(extra&&r.status===400)r=await call('grok-4');
   if(r.status===401||r.status===403)throw {msg:'Grok didn’t accept the key. Check it in ☰.'};
