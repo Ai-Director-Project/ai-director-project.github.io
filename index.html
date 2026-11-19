@@ -468,7 +468,7 @@ const chat=$('chat');
 let busy=false;
 function markLatest(){const ms=chat.querySelectorAll('.msg');ms.forEach(m=>m.classList.remove('latest'));if(ms.length)ms[ms.length-1].classList.add('latest')}
 function bubble(text,cls){const d=document.createElement('div');d.className='msg '+cls;d.textContent=text;chat.appendChild(d);markLatest();if(typeof wake==='function')wake();chat.scrollTop=chat.scrollHeight;return d}
-function note(text){chat.querySelectorAll('.note.fresh').forEach(n=>n.classList.remove('fresh'));const d=document.createElement('div');d.className='note fresh';d.textContent=text;chat.appendChild(d);chat.scrollTop=chat.scrollHeight;setTimeout(()=>d.classList.remove('fresh'),7000);wake()}
+function note(text,link){chat.querySelectorAll('.note.fresh').forEach(n=>n.classList.remove('fresh'));const d=document.createElement('div');d.className='note fresh';d.textContent=text;if(link){const a=document.createElement('a');a.href=link.url;a.target='_blank';a.rel='noopener';a.textContent=' '+link.label;a.style.cssText='color:#e07a95;font-weight:600;text-decoration:underline';d.appendChild(a)}chat.appendChild(d);chat.scrollTop=chat.scrollHeight;setTimeout(()=>d.classList.remove('fresh'),7000);wake()}
 let hushT=null;
 function wake(){chat.classList.remove('hush');clearTimeout(hushT);const sec=+(store.get('hideSec',0));if(sec)hushT=setTimeout(()=>{if(!busy&&document.activeElement!==$('input'))chat.classList.add('hush')},sec*1000)}
 chat.addEventListener('click',wake);$('input').addEventListener('focus',wake);
@@ -724,7 +724,7 @@ $('sessStart').onclick=()=>{if(!confirm('Start a fresh session? This clears the 
 async function kickoff(){if(!apiKey||busy)return;busy=true;
   history.push({who:'me',hide:true,text:'[The app: I just started a new session with the settings in your instructions. Open the session in character and lead the conversation. No tasks until I ask for one.]'});saveHistory();
   const t=bubble('typing…','them typing');
-  try{handleReply(t,await askGrok())}catch(e){t.remove();markLatest();note(e&&e.msg?e.msg:'Couldn\u2019t reach her. Say hi to start.')}
+  try{handleReply(t,await askGrok())}catch(e){t.remove();markLatest();note(e&&e.msg?e.msg:'Couldn\u2019t reach her. Say hi to start.',e&&e.link)}
   busy=false}
 let sessTick=null;
 function sessStatus(){clearInterval(sessTick);const upd=()=>{if(check)return;const base=(settings.name||'Vesper')+(store.get('train',false)?' · training':' · online');
@@ -895,8 +895,13 @@ async function askGrok(extra){
   let r=await call(THINK_MODEL);if(!r.ok&&r.status!==401)r=await call(MODEL);
   if(r.status===0)throw {msg:'Lost connection to her. Check your internet and send it again.'};
   if(extra&&r.status===400)r=await call('grok-4');
-  if(r.status===401||r.status===403)throw {msg:'Grok didn’t accept the key. Check it in ☰.'};
-  if(r.status===429)throw {msg:'Grok says slow down, or your credit has run out. Check console.x.ai.'};
+  if(r.status===401||r.status===403||r.status===429){
+    let body='';try{body=(await r.text()).toLowerCase()}catch(e){}
+    const TOPUP={url:'https://console.x.ai',label:'Tap here to top up →'};
+    if(/credit|balance|spending|billing|payment|funds|exhaust|quota|limit reached/.test(body))throw {msg:'Vesper’s out of credit.',link:TOPUP};
+    if(r.status===429)throw {msg:'Grok says slow down. Wait a moment and send it again. If it keeps happening, your credit may have run out.',link:TOPUP};
+    throw {msg:'Grok didn’t accept the key. Check it in ☰. (If the key looks right, your credit may have run out.)',link:TOPUP};
+  }
   if(!r.ok)throw {msg:'Grok had a problem (error '+r.status+'). Try again.'};
   const j=await r.json(); const reply=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
   if(!reply)throw {msg:'Grok sent back an empty reply. Try again.'};
@@ -976,7 +981,7 @@ async function send(){
   if(!apiKey){toast('Add your Grok key in ☰ first');$('sheet').hidden=false;return}
   busy=true; history.push({who:'me',text:v,at:Date.now()}); saveHistory(); bubble(v,'me'); $('input').value=''; autosize();
   const t=bubble('typing…','them typing');
-  try{handleReply(t,await askGrok())}catch(e){t.remove(); markLatest(); note(e&&e.msg?e.msg:'Couldn’t reach Grok. Check your internet and try again.')}
+  try{handleReply(t,await askGrok())}catch(e){t.remove(); markLatest(); note(e&&e.msg?e.msg:'Couldn’t reach Grok. Check your internet and try again.',e&&e.link)}
   busy=false; chat.scrollTop=chat.scrollHeight;
 }
 
@@ -1037,7 +1042,7 @@ async function sendPhoto(file,cam){
     history.push({who:'me',text:'📷 Photo sent ('+(wasCheck?'photo check, ':'')+(cam==='back'?'back':'front')+' camera). You reviewed it below.'});
     if(wasCheck)clearCheck();
     handleReply(t,reply);
-  }catch(e){t.remove(); markLatest(); note(e&&e.msg?e.msg:'Couldn’t send the photo. Check your internet and try again.')}
+  }catch(e){t.remove(); markLatest(); note(e&&e.msg?e.msg:'Couldn’t send the photo. Check your internet and try again.',e&&e.link)}
   busy=false; chat.scrollTop=chat.scrollHeight;
 }
 $('camFront').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';sendPhoto(f,'front')});
