@@ -786,9 +786,10 @@ let chatT=null,chatCleared=store.get('chatCleared',0);
 function chatSoon(){if(!syncOn())return;clearTimeout(chatT);chatT=setTimeout(syncChat,2000)}
 async function syncChat(){if(!syncOn())return;if(busy){chatSoon();return}
   const before=history.map(m=>m.id).join();
-  try{const r=await fetch(HELPER+'/chat',{method:'PUT',headers:{'Content-Type':'application/json','X-Code':syncCode},body:JSON.stringify({history:history.slice(-60),cleared:chatCleared,persona})});
+  try{const r=await fetch(HELPER+'/chat',{method:'PUT',headers:{'Content-Type':'application/json','X-Code':syncCode},body:JSON.stringify({history:history.slice(-60),cleared:chatCleared,persona,cage})});
     if(!r.ok)return;const d=await r.json();if(!d||!Array.isArray(d.history))return;
     if(busy||history.map(m=>m.id).join()!==before){chatSoon();return}
+    if(d.cage&&(+d.cage.at||0)>(+cage.at||0)){cage=d.cage;store.set('cage',cage)}
     if((+d.cleared||0)>chatCleared){chatCleared=+d.cleared;store.set('chatCleared',chatCleared)}
     const merged=d.history.filter(m=>(m.at||0)>=chatCleared).slice(-60);
     if(merged.map(m=>m.id).join()===before)return;
@@ -917,6 +918,14 @@ function nowText(){const d=new Date();
   const prev=history.slice(0,-1).filter(m=>m.at).pop();
   if(prev){const gap=(Date.now()-prev.at)/60000;if(gap>=20)t+=' The previous message in this chat was '+fmtMins(gap)+' ago, so time has passed since then.'}
   return t}
+/* chastity cage record: Vesper keeps it from what Tim tells her or what she sees in photos */
+let cage=store.get('cage',{on:false,since:0,at:0,log:[]});
+function saveCage(){store.set('cage',cage);try{chatSoon()}catch(e){}}
+function cageWhen(t){return new Date(t).toLocaleString('en-AU',{weekday:'short',hour:'numeric',minute:'2-digit'}).toLowerCase()}
+function cageText(){const L=cage.log||[];const longest=L.reduce((m,x)=>Math.max(m,x.off-x.on),cage.on?Date.now()-cage.since:0);
+  const week=L.filter(x=>x.off>Date.now()-7*864e5).length+(cage.on?1:0);
+  if(!cage.since)return 'Chastity cage: no record yet (you record it with the cage tool when he tells you or you see it).';
+  return 'Chastity cage: '+(cage.on?'ON since '+cageWhen(cage.since)+' ('+fmtMins((Date.now()-cage.since)/60000)+' so far)':'OFF since '+cageWhen(cage.since)+' ('+fmtMins((Date.now()-cage.since)/60000)+' ago)')+'. Longest stretch on record: '+(longest?fmtMins(longest/60000):'none')+'. Times on in the last 7 days: '+week+'.'}
 /* Vesper's tools: real actions she can take one after another, seeing each result */
 const TOOLS=[
  {type:'function',function:{name:'check_status',description:'See what is going on right now: photo check, timers and wake-ups, toys and VOIDLOCK, key box, photo collection. Use it before promising anything you are unsure of.',parameters:{type:'object',properties:{}}}},
@@ -925,15 +934,16 @@ const TOOLS=[
  {type:'function',function:{name:'toy',description:'Run one of his Lovense toys now. Give on_seconds and off_seconds for an on/off rhythm.',parameters:{type:'object',properties:{name:{type:'string',description:'Gemini, Hush 2 or Tenera 2'},level:{type:'number',description:'0-20'},seconds:{type:'number',description:'How long, up to 300 (rhythms up to 3600)'},on_seconds:{type:'number'},off_seconds:{type:'number'}},required:['name','level','seconds']}}},
  {type:'function',function:{name:'toy_stop',description:'Stop all toys straight away.',parameters:{type:'object',properties:{}}}},
  {type:'function',function:{name:'wake_me',description:'Private wake-up only you see: you get control back after this many seconds, without Tim having to message you, so you can adjust things (change a toy, stop it, set a photo check) and then either message him or stay quiet. Only works while the app is open on his screen.',parameters:{type:'object',properties:{seconds:{type:'number',description:'20-7200'},note:{type:'string',description:'Reminder to yourself of why you set it'}},required:['seconds']}}},
+ {type:'function',function:{name:'cage',description:'Record his chastity cage going on or coming off. Do this straight away whenever Tim tells you, or a photo shows, that it has gone on or come off. If he says it went on/off earlier, give minutes_ago.',parameters:{type:'object',properties:{on:{type:'boolean',description:'true = cage is now on, false = now off'},minutes_ago:{type:'number',description:'If it happened earlier, how many minutes ago'}},required:['on']}}},
  {type:'function',function:{name:'release_key_box',description:'Give Tim a one-time code that opens the key box (one use, valid 6 hours). Only when you have decided to let him out, or straight away for a real emergency, health or safety.',parameters:{type:'object',properties:{}}}}
 ];
-const TOOL_RULES="\n\nYOUR TOOLS: as well as tags, you have real tools (check_status, photo_check, cancel_photo_check, toy, toy_stop, wake_me, release_key_box). Tools are better than tags because you see the result before you write. You can use several in a row in one turn (e.g. check_status, then photo_check, then wake_me) and only then write your message. What a tool result says really happened; if it says it failed, it failed. wake_me lets you come back on your own a little later (while the app is open) to ride the scene: turn a toy up or down, pause it, switch to something else, start a photo check. When you are woken that way you may reply with just [QUIET] if there is nothing worth saying. Keep using tags for photos you keep or show ([KEEP], [SHOW], [DROP], [BACKGROUND]), [NOTE: ...], [CHECKIN] and on-screen [TIMER]s.";
+const TOOL_RULES="\n\nYOUR TOOLS: as well as tags, you have real tools (check_status, photo_check, cancel_photo_check, toy, toy_stop, wake_me, cage, release_key_box). Tools are better than tags because you see the result before you write. You can use several in a row in one turn (e.g. check_status, then photo_check, then wake_me) and only then write your message. What a tool result says really happened; if it says it failed, it failed. wake_me lets you come back on your own a little later (while the app is open) to ride the scene: turn a toy up or down, pause it, switch to something else, start a photo check. When you are woken that way you may reply with just [QUIET] if there is nothing worth saying. Whenever Tim says, or a photo shows, that his cage has gone on or come off, record it with the cage tool straight away; the app then reminds you of it in every message, so never guess how long it has been. Keep using tags for photos you keep or show ([KEEP], [SHOW], [DROP], [BACKGROUND]), [NOTE: ...], [CHECKIN] and on-screen [TIMER]s.";
 function laterText(){const now=Date.now();const l=later.slice().sort((a,b)=>a.due-b.due).map(x=>(x.k==='wake'?'your private wake-up'+(x.note?' ("'+x.note+'")':''):x.k==='timer'?'on-screen timer'+(x.label?' "'+x.label+'"':''):'delayed toy command '+x.cmd)+' in '+fmt(x.due-now));return l.length?l.join('; '):'none'}
 async function runTool(name,a){
   const nm=settings.name||'Vesper';
   if(name==='check_status'){const c=check?'set, due '+(check.due<=Date.now()?'NOW (waiting for his photo)':'in '+fmt(check.due-Date.now()))+', '+check.cam+' camera':'none set';
     const lc=store.get('lastCode',null);
-    return 'Time: '+new Date().toLocaleTimeString('en-AU',{hour:'numeric',minute:'2-digit'})+'. Photo check: '+c+'. Timers/wake-ups: '+laterText()+'. Toys: '+(locked?'LOCKED by VOIDLOCK (no toy control)':!settings.adaCtl?'your toy control is switched off':'you can control '+connectedLov().map(t=>t.n).join(', '))+'. Recent toy results: '+(toyLog.slice(-4).join('; ')||'none')+'. Key box: '+(lc&&lc.at?'last code given '+fmtMins((Date.now()-lc.at)/60000)+' ago':'no code given recently')+'. Photo collection: '+phIdx.length+' kept. App open on his screen: '+(document.visibilityState==='visible'?'yes':'no (in the background)')+'.'}
+    return 'Time: '+new Date().toLocaleTimeString('en-AU',{hour:'numeric',minute:'2-digit'})+'. Photo check: '+c+'. Timers/wake-ups: '+laterText()+'. Toys: '+(locked?'LOCKED by VOIDLOCK (no toy control)':!settings.adaCtl?'your toy control is switched off':'you can control '+connectedLov().map(t=>t.n).join(', '))+'. Recent toy results: '+(toyLog.slice(-4).join('; ')||'none')+'. Key box: '+(lc&&lc.at?'last code given '+fmtMins((Date.now()-lc.at)/60000)+' ago':'no code given recently')+'. '+cageText()+' Photo collection: '+phIdx.length+' kept. App open on his screen: '+(document.visibilityState==='visible'?'yes':'no (in the background)')+'.'}
   if(name==='photo_check'){if(locked)return 'Not set: VOIDLOCK is active.';const mins=Math.max(0,Math.min(2880,+a.minutes||0));const cam=a.camera==='back'?'back':'front';
     setCheck(Date.now()+mins*60000,cam);return 'Photo check set: '+(mins?'due in '+fmtMins(mins)+' (at '+new Date(Date.now()+mins*60000).toLocaleTimeString('en-AU',{hour:'numeric',minute:'2-digit'})+')':'due right now')+', '+cam+' camera. He sees the countdown'+(mins?' and gets a phone alert when it is due':'')+'.'}
   if(name==='cancel_photo_check'){if(!check)return 'There was no photo check to cancel.';clearCheck();return 'Photo check cancelled.'}
@@ -944,12 +954,16 @@ async function runTool(name,a){
     const n0=toyLog.length;await runToyTags(tag);const res=toyLog.slice(n0);return res.length?res.join('; '):'Nothing ran ('+(a.name||'?')+' isn’t one of his toys).'}
   if(name==='wake_me'){const sec=Math.max(20,Math.min(7200,Math.round(+a.seconds||60)));if(later.filter(x=>x.k==='wake').length>=3)return 'Not set: you already have 3 wake-ups waiting.';
     later.push({k:'wake',due:Date.now()+sec*1000,sec,note:String(a.note||'').slice(0,80)});saveLater();startLater();return 'You will be woken in '+fmt(sec*1000)+(document.visibilityState==='visible'?'.':' (but the app is in the background right now, so it only happens once he has it open).')}
+  if(name==='cage'){const at=Date.now()-Math.max(0,Math.min(20160,+a.minutes_ago||0))*60000;
+    if(a.on){if(cage.on)return 'Already recorded as on since '+cageWhen(cage.since)+'. Nothing changed.';cage={...cage,on:true,since:at,at:Date.now()}}
+    else{if(!cage.on)return 'Already recorded as off. Nothing changed.';const log=(cage.log||[]).concat([{on:cage.since,off:at}]).slice(-30);cage={...cage,on:false,since:at,log,at:Date.now()}}
+    saveCage();return 'Recorded. '+cageText()}
   if(name==='release_key_box'){const before=(store.get('lastCode',null)||{}).at||0;await runRelease();const lc=store.get('lastCode',null);
     return lc&&lc.at>before?'Done: Tim has been shown a one-time key box code (you never see it).':'The release did NOT work (or was already done in the last 2 minutes). No new code was given.'}
   return 'Unknown tool.'}
 async function askGrok(extra,fast){
   const msgs=[{role:'system',content:(store.get('train',false)?TRAIN_RULES+'\n\n(Her normal character, for reference only while training:)\n':'')+(persona||DEFAULT_PERSONA)+memPrompt()+CAPS+TOOL_RULES+(store.get('train',false)?'':ASK_RULES)+PHOTO_RULES+collPrompt()+sessPrompt()+(store.get('train',false)?TRAIN_RULES:'')}].concat(history.slice(-KEEP).map(m=>({role:m.who==='me'?'user':'assistant',content:m.text})));
-  msgs[0].content+=nowText();
+  msgs[0].content+=nowText()+'\n'+cageText();
   if(extra)msgs.push(extra);
   let useTools=true;
   const call=async model=>{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),90000);try{return await fetch('https://api.x.ai/v1/chat/completions',{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},body:JSON.stringify({model,messages:msgs,max_tokens:model===THINK_MODEL?8000:600,...(model===THINK_MODEL?{reasoning_effort:'low'}:{}),...(useTools?{tools:TOOLS,tool_choice:'auto'}:{})})})}catch(e){return {ok:false,status:0}}finally{clearTimeout(tm)}};

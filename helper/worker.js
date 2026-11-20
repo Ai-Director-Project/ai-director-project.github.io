@@ -81,10 +81,15 @@ export default {
       const old = (await env.STORE.get("chat", "json")) || { history: [], cleared: 0 };
       const merged = mergeChat(old, body);
       merged.persona = typeof body.persona === "string" && body.persona.trim() ? body.persona.slice(0, 100000) : old.persona;
-      const same = JSON.stringify(merged.history) === JSON.stringify(old.history || []) && merged.cleared === (old.cleared || 0) && merged.persona === old.persona;
+      // chastity cage record: newest wins
+      const bc = body.cage && typeof body.cage === "object" ? body.cage : null;
+      merged.cage = bc && (+bc.at || 0) > (+(old.cage && old.cage.at) || 0)
+        ? { on: !!bc.on, since: +bc.since || 0, at: +bc.at || 0, log: Array.isArray(bc.log) ? bc.log.slice(-30).map(x => ({ on: +x.on || 0, off: +x.off || 0 })) : [] }
+        : old.cage;
+      const same = JSON.stringify(merged.history) === JSON.stringify(old.history || []) && merged.cleared === (old.cleared || 0) && merged.persona === old.persona && merged.cage === old.cage;
       if (!same) { merged.updated = Date.now(); await env.STORE.put("chat", JSON.stringify(merged)); }
       else merged.updated = old.updated || 0;
-      return reply({ history: merged.history, cleared: merged.cleared, updated: merged.updated });
+      return reply({ history: merged.history, cleared: merged.cleared, updated: merged.updated, cage: merged.cage || null });
     }
     if (path === "/mem" && req.method === "GET") {
       const data = await env.STORE.get("mem", "json");
