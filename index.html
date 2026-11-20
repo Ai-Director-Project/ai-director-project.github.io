@@ -473,7 +473,7 @@ let hushT=null;
 function wake(){chat.classList.remove('hush');clearTimeout(hushT);const sec=+(store.get('hideSec',0));if(sec)hushT=setTimeout(()=>{if(!busy&&document.activeElement!==$('input'))chat.classList.add('hush')},sec*1000)}
 chat.addEventListener('click',wake);$('input').addEventListener('focus',wake);
 const TAG=/\[PHOTO(?:\s+(now|\d{1,4}(?:\.\d+)?))?(?:\s*(h|hr|hrs|hours?|m|min|mins|minutes?)\b)?(?:\s+(front|back))?\s*\]/i;
-function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*|TIMER [^\]]*|AFTER [^\]]*|RELEASE|KEEP(?::[^\]]*)?|SHOW[ #0-9,]*|DROP[ #0-9,]*|BACKGROUND[^\]]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
+function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*|TIMER [^\]]*|AFTER [^\]]*|RELEASE|KEEP(?::[^\]]*)?|SHOW[ #0-9,]*|DROP[ #0-9,]*|BACKGROUND[^\]]*|QUIET)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
 function renderMsg(m){const tx=clean(m.text);if(tx||m.who==='me'||!showNums(m.text).length)bubble(tx||'…',m.who==='me'?'me':'them');if(m.who!=='me')showNums(m.text).forEach(n=>picBubble(n))}
 history.filter(m=>!m.hide).forEach(renderMsg);
 function saveHistory(){const cut=history.length-60;if(cut>0){const lost=history.slice(0,cut);if(lost.some(m=>!m.dg)&&typeof catchUp==='function')catchUp(true,lost)}history=history.slice(-60);store.set('history',history);stampHistory();try{chatSoon()}catch(e){}}
@@ -565,12 +565,19 @@ async function runLater(){const now=Date.now();const due=later.filter(x=>x.due<=
   if(due.length){later=later.filter(x=>x.due>now);saveLater();
     for(const x of due){const late=now-x.due>180000;
       if(x.k==='toy'){if(!late&&!locked)await runToyTags(x.cmd,true)}
+      else if(x.k==='wake'){if(!late)wakeDone(x)}
       else{note('\u23F1 Time\u2019s up'+(x.label?': '+x.label:''));try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}
         if(!late)timerDone(x)}}}
   if(!later.length)clearInterval(laterTick);showLater()}
 async function timerDone(x){for(let i=0;busy&&i<60;i++)await new Promise(r=>setTimeout(r,1000));if(busy||!apiKey)return;busy=true;
   history.push({who:'me',hide:true,text:'[The app: your '+fmtMins(x.sec/60)+' timer'+(x.label?' ("'+x.label+'")':'')+' has just finished. Carry on in character.]'});saveHistory();
   const t=bubble('typing\u2026','them typing');try{handleReply(t,await askGrok())}catch(e){t.remove();markLatest()}busy=false}
+async function wakeDone(x){for(let i=0;busy&&i<60;i++)await new Promise(r=>setTimeout(r,1000));if(busy||!apiKey)return;busy=true;
+  history.push({who:'me',hide:true,text:'[The app: your private wake-up'+(x.note?' ("'+x.note+'")':'')+' has come round. Tim can’t see this. Look at where things are, use your tools if you want to change anything, then either write to Tim or reply with just [QUIET].]'});saveHistory();
+  try{const reply=await askGrok(null,true);
+    if(/^\s*\[QUIET\]\s*$/i.test(reply)||!clean(reply)&&!showNums(reply).length){const d=document.createElement('div');handleReply(d,reply);const m=history[history.length-1];if(m&&m.who==='them'){m.hide=true;saveHistory()}}
+    else{const t=bubble('typing…','them typing');handleReply(t,reply)}}
+  catch(e){}busy=false}
 function clearLater(){later=[];saveLater();clearInterval(laterTick)}
 
 /* VOIDLOCK lock state and unlock (human only; Ada's tags can't reach this) */
@@ -910,25 +917,73 @@ function nowText(){const d=new Date();
   const prev=history.slice(0,-1).filter(m=>m.at).pop();
   if(prev){const gap=(Date.now()-prev.at)/60000;if(gap>=20)t+=' The previous message in this chat was '+fmtMins(gap)+' ago, so time has passed since then.'}
   return t}
-async function askGrok(extra){
-  const msgs=[{role:'system',content:(store.get('train',false)?TRAIN_RULES+'\n\n(Her normal character, for reference only while training:)\n':'')+(persona||DEFAULT_PERSONA)+memPrompt()+CAPS+(store.get('train',false)?'':ASK_RULES)+PHOTO_RULES+collPrompt()+sessPrompt()+(store.get('train',false)?TRAIN_RULES:'')}].concat(history.slice(-KEEP).map(m=>({role:m.who==='me'?'user':'assistant',content:m.text})));
+/* Vesper's tools: real actions she can take one after another, seeing each result */
+const TOOLS=[
+ {type:'function',function:{name:'check_status',description:'See what is going on right now: photo check, timers and wake-ups, toys and VOIDLOCK, key box, photo collection. Use it before promising anything you are unsure of.',parameters:{type:'object',properties:{}}}},
+ {type:'function',function:{name:'photo_check',description:'Set a photo check: his phone alerts him when it is due (even with the app closed) and he must send a photo. Replaces any photo check already set.',parameters:{type:'object',properties:{minutes:{type:'number',description:'Minutes from now, 0 = right now, max 2880 (48 h)'},camera:{type:'string',enum:['front','back']}},required:['minutes']}}},
+ {type:'function',function:{name:'cancel_photo_check',description:'Cancel the photo check that is set.',parameters:{type:'object',properties:{}}}},
+ {type:'function',function:{name:'toy',description:'Run one of his Lovense toys now. Give on_seconds and off_seconds for an on/off rhythm.',parameters:{type:'object',properties:{name:{type:'string',description:'Gemini, Hush 2 or Tenera 2'},level:{type:'number',description:'0-20'},seconds:{type:'number',description:'How long, up to 300 (rhythms up to 3600)'},on_seconds:{type:'number'},off_seconds:{type:'number'}},required:['name','level','seconds']}}},
+ {type:'function',function:{name:'toy_stop',description:'Stop all toys straight away.',parameters:{type:'object',properties:{}}}},
+ {type:'function',function:{name:'wake_me',description:'Private wake-up only you see: you get control back after this many seconds, without Tim having to message you, so you can adjust things (change a toy, stop it, set a photo check) and then either message him or stay quiet. Only works while the app is open on his screen.',parameters:{type:'object',properties:{seconds:{type:'number',description:'20-7200'},note:{type:'string',description:'Reminder to yourself of why you set it'}},required:['seconds']}}},
+ {type:'function',function:{name:'release_key_box',description:'Give Tim a one-time code that opens the key box (one use, valid 6 hours). Only when you have decided to let him out, or straight away for a real emergency, health or safety.',parameters:{type:'object',properties:{}}}}
+];
+const TOOL_RULES="\n\nYOUR TOOLS: as well as tags, you have real tools (check_status, photo_check, cancel_photo_check, toy, toy_stop, wake_me, release_key_box). Tools are better than tags because you see the result before you write. You can use several in a row in one turn (e.g. check_status, then photo_check, then wake_me) and only then write your message. What a tool result says really happened; if it says it failed, it failed. wake_me lets you come back on your own a little later (while the app is open) to ride the scene: turn a toy up or down, pause it, switch to something else, start a photo check. When you are woken that way you may reply with just [QUIET] if there is nothing worth saying. Keep using tags for photos you keep or show ([KEEP], [SHOW], [DROP], [BACKGROUND]), [NOTE: ...], [CHECKIN] and on-screen [TIMER]s.";
+function laterText(){const now=Date.now();const l=later.slice().sort((a,b)=>a.due-b.due).map(x=>(x.k==='wake'?'your private wake-up'+(x.note?' ("'+x.note+'")':''):x.k==='timer'?'on-screen timer'+(x.label?' "'+x.label+'"':''):'delayed toy command '+x.cmd)+' in '+fmt(x.due-now));return l.length?l.join('; '):'none'}
+async function runTool(name,a){
+  const nm=settings.name||'Vesper';
+  if(name==='check_status'){const c=check?'set, due '+(check.due<=Date.now()?'NOW (waiting for his photo)':'in '+fmt(check.due-Date.now()))+', '+check.cam+' camera':'none set';
+    const lc=store.get('lastCode',null);
+    return 'Time: '+new Date().toLocaleTimeString('en-AU',{hour:'numeric',minute:'2-digit'})+'. Photo check: '+c+'. Timers/wake-ups: '+laterText()+'. Toys: '+(locked?'LOCKED by VOIDLOCK (no toy control)':!settings.adaCtl?'your toy control is switched off':'you can control '+connectedLov().map(t=>t.n).join(', '))+'. Recent toy results: '+(toyLog.slice(-4).join('; ')||'none')+'. Key box: '+(lc&&lc.at?'last code given '+fmtMins((Date.now()-lc.at)/60000)+' ago':'no code given recently')+'. Photo collection: '+phIdx.length+' kept. App open on his screen: '+(document.visibilityState==='visible'?'yes':'no (in the background)')+'.'}
+  if(name==='photo_check'){if(locked)return 'Not set: VOIDLOCK is active.';const mins=Math.max(0,Math.min(2880,+a.minutes||0));const cam=a.camera==='back'?'back':'front';
+    setCheck(Date.now()+mins*60000,cam);return 'Photo check set: '+(mins?'due in '+fmtMins(mins)+' (at '+new Date(Date.now()+mins*60000).toLocaleTimeString('en-AU',{hour:'numeric',minute:'2-digit'})+')':'due right now')+', '+cam+' camera. He sees the countdown'+(mins?' and gets a phone alert when it is due':'')+'.'}
+  if(name==='cancel_photo_check'){if(!check)return 'There was no photo check to cancel.';clearCheck();return 'Photo check cancelled.'}
+  if(name==='toy'||name==='toy_stop'){if(locked)return 'Nothing ran: VOIDLOCK is active.';if(!settings.adaCtl)return 'Nothing ran: your toy control is switched off in his settings.';
+    let tag;if(name==='toy_stop')tag='[STOP]';else{const lvl=Math.max(0,Math.min(20,Math.round(+a.level||0)));
+      if(+a.on_seconds>0)tag='[TOY '+a.name+' rhythm on '+(+a.on_seconds)+' off '+Math.max(0,+a.off_seconds||0)+' for '+Math.max(1,Math.min(3600,Math.round(+a.seconds||60)))+' at '+Math.max(1,lvl)+']';
+      else tag='[TOY '+a.name+' '+lvl+' '+Math.max(1,Math.min(300,Math.round(+a.seconds||10)))+']'}
+    const n0=toyLog.length;await runToyTags(tag);const res=toyLog.slice(n0);return res.length?res.join('; '):'Nothing ran ('+(a.name||'?')+' isn’t one of his toys).'}
+  if(name==='wake_me'){const sec=Math.max(20,Math.min(7200,Math.round(+a.seconds||60)));if(later.filter(x=>x.k==='wake').length>=3)return 'Not set: you already have 3 wake-ups waiting.';
+    later.push({k:'wake',due:Date.now()+sec*1000,sec,note:String(a.note||'').slice(0,80)});saveLater();startLater();return 'You will be woken in '+fmt(sec*1000)+(document.visibilityState==='visible'?'.':' (but the app is in the background right now, so it only happens once he has it open).')}
+  if(name==='release_key_box'){const before=(store.get('lastCode',null)||{}).at||0;await runRelease();const lc=store.get('lastCode',null);
+    return lc&&lc.at>before?'Done: Tim has been shown a one-time key box code (you never see it).':'The release did NOT work (or was already done in the last 2 minutes). No new code was given.'}
+  return 'Unknown tool.'}
+async function askGrok(extra,fast){
+  const msgs=[{role:'system',content:(store.get('train',false)?TRAIN_RULES+'\n\n(Her normal character, for reference only while training:)\n':'')+(persona||DEFAULT_PERSONA)+memPrompt()+CAPS+TOOL_RULES+(store.get('train',false)?'':ASK_RULES)+PHOTO_RULES+collPrompt()+sessPrompt()+(store.get('train',false)?TRAIN_RULES:'')}].concat(history.slice(-KEEP).map(m=>({role:m.who==='me'?'user':'assistant',content:m.text})));
   msgs[0].content+=nowText();
   if(extra)msgs.push(extra);
-  const call=async model=>{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),90000);try{return await fetch('https://api.x.ai/v1/chat/completions',{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},body:JSON.stringify({model,messages:msgs,max_tokens:model===THINK_MODEL?8000:600,...(model===THINK_MODEL?{reasoning_effort:'low'}:{})})})}catch(e){return {ok:false,status:0}}finally{clearTimeout(tm)}};
-  let r=await call(THINK_MODEL);if(!r.ok&&r.status!==401)r=await call(MODEL);
-  if(r.status===0)throw {msg:'Lost connection to her. Check your internet and send it again.'};
-  if(extra&&r.status===400)r=await call('grok-4');
-  if(r.status===401||r.status===403||r.status===429){
-    let body='';try{body=(await r.text()).toLowerCase()}catch(e){}
-    const TOPUP={url:'https://console.x.ai',label:'Tap here to top up →'};
-    if(/credit|balance|spending|billing|payment|funds|exhaust|quota|limit reached/.test(body))throw {msg:'Vesper’s out of credit.',link:TOPUP};
-    if(r.status===429)throw {msg:'Grok says slow down. Wait a moment and send it again. If it keeps happening, your credit may have run out.',link:TOPUP};
-    throw {msg:'Grok didn’t accept the key. Check it in ☰. (If the key looks right, your credit may have run out.)',link:TOPUP};
-  }
-  if(!r.ok)throw {msg:'Grok had a problem (error '+r.status+'). Try again.'};
-  const j=await r.json(); const reply=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
-  if(!reply)throw {msg:'Grok sent back an empty reply. Try again.'};
-  return reply;
+  let useTools=true;
+  const call=async model=>{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),90000);try{return await fetch('https://api.x.ai/v1/chat/completions',{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},body:JSON.stringify({model,messages:msgs,max_tokens:model===THINK_MODEL?8000:600,...(model===THINK_MODEL?{reasoning_effort:'low'}:{}),...(useTools?{tools:TOOLS,tool_choice:'auto'}:{})})})}catch(e){return {ok:false,status:0}}finally{clearTimeout(tm)}};
+  const once=async()=>{
+    let r=await call(fast?MODEL:THINK_MODEL);if(!r.ok&&r.status!==401)r=await call(fast?THINK_MODEL:MODEL);
+    if(r.status===400&&useTools){useTools=false;r=await call(fast?MODEL:THINK_MODEL)}
+    if(r.status===0)throw {msg:'Lost connection to her. Check your internet and send it again.'};
+    if(extra&&r.status===400)r=await call('grok-4');
+    if(r.status===401||r.status===403||r.status===429){
+      let body='';try{body=(await r.text()).toLowerCase()}catch(e){}
+      const TOPUP={url:'https://console.x.ai',label:'Tap here to top up →'};
+      if(/credit|balance|spending|billing|payment|funds|exhaust|quota|limit reached/.test(body))throw {msg:'Vesper’s out of credit.',link:TOPUP};
+      if(r.status===429)throw {msg:'Grok says slow down. Wait a moment and send it again. If it keeps happening, your credit may have run out.',link:TOPUP};
+      throw {msg:'Grok didn’t accept the key. Check it in ☰. (If the key looks right, your credit may have run out.)',link:TOPUP};
+    }
+    if(!r.ok)throw {msg:'Grok had a problem (error '+r.status+'). Try again.'};
+    const j=await r.json();return j.choices&&j.choices[0]&&j.choices[0].message};
+  /* the loop: she can use several tools in a row, seeing each result, before she writes to Tim */
+  const done=[];let reply='';
+  for(let step=0;step<7;step++){
+    const m=await once();if(!m)break;
+    const calls=Array.isArray(m.tool_calls)?m.tool_calls:[];
+    if(!calls.length||step===6){reply=m.content||'';break}
+    msgs.push({role:'assistant',content:m.content||'',tool_calls:calls});
+    for(const c of calls){let a={};try{a=JSON.parse(c.function&&c.function.arguments||'{}')}catch(e){}
+      const name=c.function&&c.function.name;let out;
+      try{out=await runTool(name,a)}catch(e){out='That didn’t work (app error).'}
+      done.push(name+(Object.keys(a).length?' '+JSON.stringify(a):'')+' → '+out);
+      msgs.push({role:'tool',tool_call_id:c.id,content:String(out)})}
+    if(!useTools)break}
+  if(!reply&&!fast){useTools=false;const m=await once();reply=m&&m.content||''}
+  if(done.length){history.push({who:'me',hide:true,text:'[The app: in that turn you used your tools: '+done.join(' | ').slice(0,1500)+']'});saveHistory()}
+  if(!reply&&!done.length)throw {msg:'Grok sent back an empty reply. Try again.'};
+  return reply||'[QUIET]';
 }
 /* quick L/A/F check-in panel */
 let lafF='Y',lafT=null;
