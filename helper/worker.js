@@ -3,6 +3,23 @@
 import { vapidKeys, pushAll, duePush } from "./push.js";
 const ORIGIN = "https://ai-director-project.github.io";
 
+// Shared chat: messages from every device (and later from Vesper waking on her own), matched by id, in time order.
+// "cleared" is when the chat was last wiped (new session); anything older is dropped everywhere.
+export function mergeChat(a, b) {
+  const cleared = Math.max(+a.cleared || 0, +b.cleared || 0);
+  const map = new Map();
+  for (const m of [...(a.history || []), ...(Array.isArray(b.history) ? b.history : [])]) {
+    if (!m || typeof m !== "object" || typeof m.id !== "string" || typeof m.text !== "string") continue;
+    if ((+m.at || 0) < cleared) continue;
+    const o = map.get(m.id);
+    map.set(m.id, o ? { ...o, ...m, dg: !!(o.dg || m.dg) || undefined } : m);
+  }
+  const history = [...map.values()]
+    .sort((x, y) => (x.at || 0) - (y.at || 0) || (x.id < y.id ? -1 : 1))
+    .slice(-200);
+  return { history, cleared };
+}
+
 export default {
   async scheduled(event, env, ctx) {
     if (env.STORE) ctx.waitUntil(duePush(env));
@@ -59,15 +76,15 @@ export default {
       return reply(data || { history: [], updated: 0 });
     }
     if (path === "/chat" && req.method === "PUT") {
-      const body = await req.json();
-      const old = await env.STORE.get("chat", "json");
-      if (old && old.updated > (body.updated || 0)) return reply(old, 409);
-      await env.STORE.put("chat", JSON.stringify({
-        history: Array.isArray(body.history) ? body.history.slice(-200) : [],
-        persona: typeof body.persona === "string" ? body.persona : undefined,
-        updated: body.updated || Date.now()
-      }));
-      return reply({ ok: true });
+      // each device sends its chat; the helper merges it with what it holds and sends the result back
+      const body = await req.json().catch(() => ({}));
+      const old = (await env.STORE.get("chat", "json")) || { history: [], cleared: 0 };
+      const merged = mergeChat(old, body);
+      merged.persona = typeof body.persona === "string" && body.persona.trim() ? body.persona.slice(0, 100000) : old.persona;
+      const same = JSON.stringify(merged.history) === JSON.stringify(old.history || []) && merged.cleared === (old.cleared || 0) && merged.persona === old.persona;
+      if (!same) { merged.updated = Date.now(); await env.STORE.put("chat", JSON.stringify(merged)); }
+      else merged.updated = old.updated || 0;
+      return reply({ history: merged.history, cleared: merged.cleared, updated: merged.updated });
     }
     if (path === "/mem" && req.method === "GET") {
       const data = await env.STORE.get("mem", "json");

@@ -476,7 +476,11 @@ const TAG=/\[PHOTO(?:\s+(now|\d{1,4}(?:\.\d+)?))?(?:\s*(h|hr|hrs|hours?|m|min|mi
 function clean(t){return String(t).replace(new RegExp(TAG.source,'gi'),'').replace(/\[(?:TOY [^\]]*|STOP|CHECKIN|NOTE:[^\]]*|TIMER [^\]]*|AFTER [^\]]*|RELEASE|KEEP(?::[^\]]*)?|SHOW[ #0-9,]*|DROP[ #0-9,]*|BACKGROUND[^\]]*)\]/gi,'').replace(/[ \t]{2,}/g,' ').trim()}
 function renderMsg(m){const tx=clean(m.text);if(tx||m.who==='me'||!showNums(m.text).length)bubble(tx||'…',m.who==='me'?'me':'them');if(m.who!=='me')showNums(m.text).forEach(n=>picBubble(n))}
 history.filter(m=>!m.hide).forEach(renderMsg);
-function saveHistory(){const cut=history.length-60;if(cut>0){const lost=history.slice(0,cut);if(lost.some(m=>!m.dg)&&typeof catchUp==='function')catchUp(true,lost)}history=history.slice(-60);store.set('history',history)}
+function saveHistory(){const cut=history.length-60;if(cut>0){const lost=history.slice(0,cut);if(lost.some(m=>!m.dg)&&typeof catchUp==='function')catchUp(true,lost)}history=history.slice(-60);store.set('history',history);stampHistory();try{chatSoon()}catch(e){}}
+/* every message gets an id and a time, so the phone, tablet and helper can share one chat */
+function stampHistory(){let last=0,tail=-1;history.forEach((m,i)=>{if(m.at)tail=i});
+  history.forEach((m,i)=>{if(!m.at)m.at=i>tail?Math.max(last+1,Date.now()):last+1;else if(m.at<=last)m.at=last+1;last=m.at;
+    if(!m.id)m.id=m.at.toString(36)+Math.random().toString(36).slice(2,7)})}
 const PHOTO_RULES="\n\nPhoto checks: you can ask Tim for a photo to prove he's doing a task. To schedule one, end your message with a tag exactly like [PHOTO 5 front] (minutes from now, then front or back camera) or [PHOTO 8h back] (hours from now). Anything from now up to 48 hours ahead works: his phone gets a notification when it's due even if the app is closed, so you can check on him through the day or overnight. Use [PHOTO now back] for an immediate check. The page hides the tag, counts down, then shows him a camera button. Only one check can be waiting at a time; a new tag replaces the old one. When a check comes due he only has a short window to take the photo; if he misses it the page will tell you. When a photo arrives, look at it carefully and honestly: say clearly whether the task looks done correctly, and what you see. Don't pretend to see things that aren't there.";
 /* toy bridge (Make) */
 const TOY_HOOK='https://hook.eu1.make.com/5ln4unqvf8sxitfag4kgwhrs1sapl82y';
@@ -718,7 +722,7 @@ $('sessBtn').onclick=()=>openSess(false);
 $('sessClose').onclick=()=>{sess=store.get('sess',sess);$('sess').hidden=true};
 $('sess').addEventListener('click',e=>{if(e.target.id==='sess'){sess=store.get('sess',sess);$('sess').hidden=true}});
 $('sessUpdate').onclick=()=>{sess.start=sess.start||Date.now();applySess();$('sess').hidden=true;note('Session updated: '+MOODS[sess.mood-1]+' · '+(STYLES.find(x=>x[0]===sess.style)||STYLES[0])[1]+' · '+lenLabel(sess.len));toast('She knows the new settings')};
-$('sessStart').onclick=()=>{if(!confirm('Start a fresh session? This clears the chat.'))return;sess.start=0;applySess();{const old=history;if(old.some(m=>!m.dg))catchUp(true,old)}history=[];saveHistory();chat.innerHTML='';checkCard=null;clearCheck();
+$('sessStart').onclick=()=>{if(!confirm('Start a fresh session? This clears the chat.'))return;chatCleared=Date.now();store.set('chatCleared',chatCleared);sess.start=0;applySess();{const old=history;if(old.some(m=>!m.dg))catchUp(true,old)}history=[];saveHistory();chat.innerHTML='';checkCard=null;clearCheck();
   note('New session: '+MOODS[sess.mood-1]+' · '+(STYLES.find(x=>x[0]===sess.style)||STYLES[0])[1]+' · '+lenLabel(sess.len));$('sess').hidden=true;$('sheet').hidden=true;
   kickoff()};
 async function kickoff(){if(!apiKey||busy)return;busy=true;
@@ -770,6 +774,25 @@ async function syncMem(manual){if(!syncOn())return false;
     const w=await fetch(HELPER+'/mem',{method:'PUT',headers:h,body:JSON.stringify({n:mem.n,f:mem.f,gone:mem.gone,p:adaMem,pu:store.get('profileAt',0),notes,nu:store.get('notesAt',0)})});if(!w.ok)throw 0;
     if(manual)toast('Memory shared with your other devices');return true}
   catch(e){if(manual)toast('Couldn\u2019t reach the sharing helper');return false}}
+/* shared chat through the helper (phone, tablet and later Vesper herself) */
+let chatT=null,chatCleared=store.get('chatCleared',0);
+function chatSoon(){if(!syncOn())return;clearTimeout(chatT);chatT=setTimeout(syncChat,2000)}
+async function syncChat(){if(!syncOn())return;if(busy){chatSoon();return}
+  const before=history.map(m=>m.id).join();
+  try{const r=await fetch(HELPER+'/chat',{method:'PUT',headers:{'Content-Type':'application/json','X-Code':syncCode},body:JSON.stringify({history:history.slice(-60),cleared:chatCleared,persona})});
+    if(!r.ok)return;const d=await r.json();if(!d||!Array.isArray(d.history))return;
+    if(busy||history.map(m=>m.id).join()!==before){chatSoon();return}
+    if((+d.cleared||0)>chatCleared){chatCleared=+d.cleared;store.set('chatCleared',chatCleared)}
+    const merged=d.history.filter(m=>(m.at||0)>=chatCleared).slice(-60);
+    if(merged.map(m=>m.id).join()===before)return;
+    history=merged;store.set('history',history);chat.innerHTML='';checkCard=null;history.filter(m=>!m.hide).forEach(renderMsg);if(check)renderCheck();chat.scrollTop=chat.scrollHeight}
+  catch(e){}}
+/* keep a copy of the Grok key on the helper so she can be woken when the app is closed */
+let keyT=null;
+function keySoon(){if(!syncOn()||!/^xai-/.test(apiKey))return;clearTimeout(keyT);keyT=setTimeout(async()=>{try{await fetch(HELPER+'/key',{method:'PUT',headers:{'Content-Type':'application/json','X-Code':syncCode},body:JSON.stringify({key:apiKey})})}catch(e){}},3000)}
+setTimeout(()=>{stampHistory();store.set('history',history);syncChat();keySoon()},1500);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncChat()});
+setInterval(()=>{if(document.visibilityState==='visible'&&!busy)syncChat()},60000);
 function memSize(){return mem.f.reduce((a,x)=>a+x.t.length+4,0)}
 function memText(){if(!mem.f.length)return '';
   let t='\n\nYOUR LONG-TERM MEMORY OF TIM (built up from everything he has told you over time; it is true unless he corrects it. Use it naturally and let it shape what you do; don\u2019t recite it back to him):';
@@ -831,7 +854,7 @@ $('memNow').onclick=()=>{if(!apiKey){toast('Add your Grok key in \u2630 first');
 function syncShow(){$('syncBox').hidden=HELPER.includes('REPLACE');$('syncStat').textContent=syncCode?'Connected. Her memory is shared.':'Not connected yet.';$('syncGo').hidden=!!syncCode;$('syncAdd').hidden=!syncCode}
 syncShow();
 function newCode(){const a=new Uint8Array(18);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,'0')).join('')}
-async function useCode(c){syncCode=c;store.set('syncCode',c);$('pinBox').hidden=true;syncShow();await syncMem(true)}
+async function useCode(c){syncCode=c;store.set('syncCode',c);$('pinBox').hidden=true;syncShow();await syncMem(true);syncChat();keySoon()}
 $('syncGo').onclick=async()=>{try{const p=await (await fetch(HELPER+'/ping')).json();
     if(!p.claimed){const c=newCode();const r=await fetch(HELPER+'/claim',{method:'POST',headers:{'X-Code':c}});if(!r.ok)throw 0;await useCode(c);return}
     $('pinBox').hidden=false;$('pinEntry').hidden=false;$('pinShow').hidden=true;$('pinMsg').textContent='On your other device, tap \u2630 \u2192 Add another device. Type the 6 numbers it shows here:';$('pinIn').value='';$('pinIn').focus()}
@@ -1057,7 +1080,7 @@ $('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.pre
 $('input').addEventListener('input',autosize);
 $('keyShow').onclick=()=>{const i=$('apiKey');const sh=i.type==='password';i.type=sh?'text':'password';$('keyShow').textContent=sh?'Hide':'Show'};
 $('keyCopy').onclick=async()=>{if(!apiKey){toast('No key saved yet');return}try{await navigator.clipboard.writeText(apiKey);toast('Key copied')}catch(e){const i=$('apiKey');i.type='text';$('keyShow').textContent='Hide';i.focus();i.select();toast('Tap and hold the key, then Copy')}};
-$('apiKey').value=apiKey;$('apiKey').oninput=e=>{apiKey=e.target.value.trim();store.set('key',apiKey);$('status').textContent=apiKey?(settings.name||'Vesper')+' · online':'Add your key in ☰'};
+$('apiKey').value=apiKey;$('apiKey').oninput=e=>{apiKey=e.target.value.trim();store.set('key',apiKey);keySoon();$('status').textContent=apiKey?(settings.name||'Vesper')+' · online':'Add your key in ☰'};
 $('persona').value=persona;
 $('persona').oninput=e=>{persona=e.target.value;store.set('persona',persona)};
 let rpArmed=false;$('resetPersona').onclick=()=>{if(!rpArmed){rpArmed=true;$('resetPersona').textContent='Tap again to replace with basic';setTimeout(()=>{rpArmed=false;$('resetPersona').textContent='Reset to basic'},3000);return}rpArmed=false;$('resetPersona').textContent='Reset to basic';persona=DEFAULT_PERSONA;$('persona').value=persona;store.set('persona',persona);toast('Basic character restored')};
