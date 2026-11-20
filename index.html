@@ -926,6 +926,10 @@ function cageText(){const L=cage.log||[];const longest=L.reduce((m,x)=>Math.max(
   const week=L.filter(x=>x.off>Date.now()-7*864e5).length+(cage.on?1:0);
   if(!cage.since)return 'Chastity cage: no record yet (you record it with the cage tool when he tells you or you see it).';
   return 'Chastity cage: '+(cage.on?'ON since '+cageWhen(cage.since)+' ('+fmtMins((Date.now()-cage.since)/60000)+' so far)':'OFF since '+cageWhen(cage.since)+' ('+fmtMins((Date.now()-cage.since)/60000)+' ago)')+'. Longest stretch on record: '+(longest?fmtMins(longest/60000):'none')+'. Times on in the last 7 days: '+week+'.'}
+const TOOLS_VER='tools2';
+setTimeout(()=>{if(store.get('toolsVer','')===TOOLS_VER)return;store.set('toolsVer',TOOLS_VER);
+  note('✨ App updated: Vesper now has tools. She can do several things in one turn, send more than one message, and wake herself up while the app is open.');
+  history.push({who:'me',hide:true,text:'[The app: you have just been upgraded. You now have real tools (see YOUR TOOLS in your instructions): you can take several actions in one turn, send several messages with send_message, and set private wake-ups with wake_me so you come back on your own while the app is open. Anything you said or noted earlier about only getting one turn is no longer true.]'});saveHistory()},2500);
 /* Vesper's tools: real actions she can take one after another, seeing each result */
 const TOOLS=[
  {type:'function',function:{name:'check_status',description:'See what is going on right now: photo check, timers and wake-ups, toys and VOIDLOCK, key box, photo collection. Use it before promising anything you are unsure of.',parameters:{type:'object',properties:{}}}},
@@ -934,10 +938,11 @@ const TOOLS=[
  {type:'function',function:{name:'toy',description:'Run one of his Lovense toys now. Give on_seconds and off_seconds for an on/off rhythm.',parameters:{type:'object',properties:{name:{type:'string',description:'Gemini, Hush 2 or Tenera 2'},level:{type:'number',description:'0-20'},seconds:{type:'number',description:'How long, up to 300 (rhythms up to 3600)'},on_seconds:{type:'number'},off_seconds:{type:'number'}},required:['name','level','seconds']}}},
  {type:'function',function:{name:'toy_stop',description:'Stop all toys straight away.',parameters:{type:'object',properties:{}}}},
  {type:'function',function:{name:'wake_me',description:'Private wake-up only you see: you get control back after this many seconds, without Tim having to message you, so you can adjust things (change a toy, stop it, set a photo check) and then either message him or stay quiet. Only works while the app is open on his screen.',parameters:{type:'object',properties:{seconds:{type:'number',description:'20-7200'},note:{type:'string',description:'Reminder to yourself of why you set it'}},required:['seconds']}}},
+ {type:'function',function:{name:'send_message',description:'Send Tim a message right now, mid-turn. Use it to send several separate messages in one turn, or to say something before you carry on acting. Your final reply is sent as well, unless it is just [QUIET].',parameters:{type:'object',properties:{text:{type:'string'}},required:['text']}}},
  {type:'function',function:{name:'cage',description:'Record his chastity cage going on or coming off. Do this straight away whenever Tim tells you, or a photo shows, that it has gone on or come off. If he says it went on/off earlier, give minutes_ago.',parameters:{type:'object',properties:{on:{type:'boolean',description:'true = cage is now on, false = now off'},minutes_ago:{type:'number',description:'If it happened earlier, how many minutes ago'}},required:['on']}}},
  {type:'function',function:{name:'release_key_box',description:'Give Tim a one-time code that opens the key box (one use, valid 6 hours). Only when you have decided to let him out, or straight away for a real emergency, health or safety.',parameters:{type:'object',properties:{}}}}
 ];
-const TOOL_RULES="\n\nYOUR TOOLS: as well as tags, you have real tools (check_status, photo_check, cancel_photo_check, toy, toy_stop, wake_me, cage, release_key_box). Tools are better than tags because you see the result before you write. You can use several in a row in one turn (e.g. check_status, then photo_check, then wake_me) and only then write your message. What a tool result says really happened; if it says it failed, it failed. wake_me lets you come back on your own a little later (while the app is open) to ride the scene: turn a toy up or down, pause it, switch to something else, start a photo check. When you are woken that way you may reply with just [QUIET] if there is nothing worth saying. Whenever Tim says, or a photo shows, that his cage has gone on or come off, record it with the cage tool straight away; the app then reminds you of it in every message, so never guess how long it has been. Keep using tags for photos you keep or show ([KEEP], [SHOW], [DROP], [BACKGROUND]), [NOTE: ...], [CHECKIN] and on-screen [TIMER]s.";
+const TOOL_RULES="\n\nYOUR TOOLS (NEW since 21 November; if any older note or memory says you only get one turn, can only send one message, or that a timer is the only way you can come back, that is OUT OF DATE, so ignore it): as well as tags, you have real tools (check_status, send_message, photo_check, cancel_photo_check, toy, toy_stop, wake_me, cage, release_key_box). Tools are better than tags because you see the result before you write. You can use several in a row in one turn (e.g. check_status, then photo_check, then wake_me) and only then write your message. send_message lets you send several separate messages in one turn. What a tool result says really happened; if it says it failed, it failed. wake_me lets you come back on your own a little later (while the app is open) to ride the scene: turn a toy up or down, pause it, switch to something else, start a photo check. When you are woken that way you may reply with just [QUIET] if there is nothing worth saying. Whenever Tim says, or a photo shows, that his cage has gone on or come off, record it with the cage tool straight away; the app then reminds you of it in every message, so never guess how long it has been. Keep using tags for photos you keep or show ([KEEP], [SHOW], [DROP], [BACKGROUND]), [NOTE: ...], [CHECKIN] and on-screen [TIMER]s.";
 function laterText(){const now=Date.now();const l=later.slice().sort((a,b)=>a.due-b.due).map(x=>(x.k==='wake'?'your private wake-up'+(x.note?' ("'+x.note+'")':''):x.k==='timer'?'on-screen timer'+(x.label?' "'+x.label+'"':''):'delayed toy command '+x.cmd)+' in '+fmt(x.due-now));return l.length?l.join('; '):'none'}
 async function runTool(name,a){
   const nm=settings.name||'Vesper';
@@ -954,6 +959,9 @@ async function runTool(name,a){
     const n0=toyLog.length;await runToyTags(tag);const res=toyLog.slice(n0);return res.length?res.join('; '):'Nothing ran ('+(a.name||'?')+' isn’t one of his toys).'}
   if(name==='wake_me'){const sec=Math.max(20,Math.min(7200,Math.round(+a.seconds||60)));if(later.filter(x=>x.k==='wake').length>=3)return 'Not set: you already have 3 wake-ups waiting.';
     later.push({k:'wake',due:Date.now()+sec*1000,sec,note:String(a.note||'').slice(0,80)});saveLater();startLater();return 'You will be woken in '+fmt(sec*1000)+(document.visibilityState==='visible'?'.':' (but the app is in the background right now, so it only happens once he has it open).')}
+  if(name==='send_message'){const tx=clean(a.text||'');if(!tx)return 'Nothing sent (empty).';
+    const d=document.createElement('div');d.className='msg them';d.textContent=tx;const ty=chat.querySelector('.msg.typing');if(ty)chat.insertBefore(d,ty);else chat.appendChild(d);markLatest();chat.scrollTop=chat.scrollHeight;
+    history.push({who:'them',text:tx,at:Date.now()});saveHistory();return 'Sent. He can see it now.'}
   if(name==='cage'){const at=Date.now()-Math.max(0,Math.min(20160,+a.minutes_ago||0))*60000;
     if(a.on){if(cage.on)return 'Already recorded as on since '+cageWhen(cage.since)+'. Nothing changed.';cage={...cage,on:true,since:at,at:Date.now()}}
     else{if(!cage.on)return 'Already recorded as off. Nothing changed.';const log=(cage.log||[]).concat([{on:cage.since,off:at}]).slice(-30);cage={...cage,on:false,since:at,log,at:Date.now()}}
@@ -994,7 +1002,7 @@ async function askGrok(extra,fast){
       done.push(name+(Object.keys(a).length?' '+JSON.stringify(a):'')+' → '+out);
       msgs.push({role:'tool',tool_call_id:c.id,content:String(out)})}
     if(!useTools)break}
-  if(!reply&&!fast){useTools=false;const m=await once();reply=m&&m.content||''}
+  if(!reply&&!fast&&!done.some(x=>x.startsWith('send_message'))){useTools=false;const m=await once();reply=m&&m.content||''}
   if(done.length){history.push({who:'me',hide:true,text:'[The app: in that turn you used your tools: '+done.join(' | ').slice(0,1500)+']'});saveHistory()}
   if(!reply&&!done.length)throw {msg:'Grok sent back an empty reply. Try again.'};
   return reply||'[QUIET]';
@@ -1054,8 +1062,9 @@ $('phView').onclick=async()=>{const g=$('phGrid');if(!g.hidden){g.hidden=true;$(
     i.onclick=()=>f.classList.toggle('big')}};
 function handleReply(t,reply){
   if((/\[CHECKIN\]/i.test(reply)||/\bL\s*[,\/]?\s*A\s*[,\/]?\s*(?:and\s+)?F\b/.test(reply))&&Date.now()-lafLast>8*60000){lafLast=Date.now();store.set('lafLast',lafLast);setTimeout(showLaf,600)}
-  t.classList.remove('typing'); const tx=clean(reply); history.push({who:'them',text:reply,at:Date.now()}); saveHistory();
-  if(tx||!showNums(reply).length)t.textContent=tx||'…'; else t.remove();
+  t.classList.remove('typing'); const tx=clean(reply); const quiet=/^\s*\[QUIET\]\s*$/i.test(reply); history.push({who:'them',text:reply,at:Date.now(),...(quiet?{hide:true}:{})}); saveHistory();
+  if(quiet){t.remove();markLatest()}
+  if(quiet){}else if(tx||!showNums(reply).length)t.textContent=tx||'…'; else t.remove();
   showNums(reply).forEach(n=>picBubble(n,true));
   photoTags(reply);
   const m=reply.match(TAG);
