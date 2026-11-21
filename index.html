@@ -45,7 +45,7 @@ header{display:flex;align-items:center;gap:12px;padding-block:12px;padding-top:c
 .iconbtn{background:none;border:1px solid var(--line);color:var(--ink);width:40px;height:40px;border-radius:50%;font-size:18px;cursor:pointer}
 .iconbtn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
 .chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.msg.pic{padding:6px;max-width:72%}.msg.pic img{display:block;width:100%;border-radius:14px;cursor:zoom-in}.msg.pic .cap{font-size:13px;opacity:.85;padding:6px 6px 2px}.msg.pic.big{max-width:100%}
+.msg.pic{padding:5px;max-width:46%}.msg.pic img{display:block;width:100%;height:180px;object-fit:cover;border-radius:12px;cursor:zoom-in}.msg.pic .cap{font-size:12px;opacity:.85;padding:5px 5px 1px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.msg.pic.big{max-width:100%}
 #phGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:8px}#phGrid figure{min-width:0;cursor:pointer}#lb{position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center}#lb[hidden]{display:none}#lb img{max-width:100vw;max-height:calc(100vh - 110px);object-fit:contain;display:block}#lb .cap{color:#eee;font-size:14px;padding:10px 16px;text-align:center}#lb .x{position:absolute;top:calc(env(safe-area-inset-top) + 10px);right:14px;background:none;border:0;color:#fff;font-size:30px;padding:6px 10px}#lb .nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.08);border:0;color:#fff;font-size:28px;width:44px;height:64px;border-radius:10px}#lb .prev{left:6px}#lb .next{right:6px}#phGrid figure{margin:0;position:relative}#phGrid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;display:block}#phGrid figcaption{font-size:11px;opacity:.8;margin-top:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .msg{max-width:80%;padding:10px 14px;border-radius:18px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;min-width:0}
 .msg{text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 8px rgba(0,0,0,.6)}
@@ -1030,7 +1030,7 @@ async function phRefresh(){if(!syncOn())return;try{const r=await fetch(HELPER+'/
 async function phGet(n){if(phCache[n])return phCache[n];const r=await fetch(HELPER+'/photos/'+n,{headers:phHead()});if(!r.ok)return null;return phCache[n]=await r.json()}
 function picBubble(n,fresh){const d=document.createElement('div');d.className='msg them pic';d.textContent='📷 Photo #'+n+'…';chat.appendChild(d);markLatest();chat.scrollTop=chat.scrollHeight;
   new Promise(r=>setTimeout(r,0)).then(()=>syncOn()?phGet(n):null).then(p=>{if(!p){d.textContent='📷 Photo #'+n+' isn’t in her collection.';if(fresh){history.push({who:'me',hide:true,text:'[The app: you tried to show photo #'+n+' but it isn’t in your collection'+(phIdx.length?' (you have #'+phIdx.map(x=>x.n).join(', #')+')':' (it is empty: nothing has been kept yet, a photo is only kept when you add [KEEP: caption] right after he sends it)')+'. Don’t pretend he can see it.]'});saveHistory()}return}
-    d.textContent='';const i=new Image();i.src=p.data;i.alt='Photo '+n;i.onclick=()=>d.classList.toggle('big');i.onload=()=>{chat.scrollTop=chat.scrollHeight};d.appendChild(i);
+    d.textContent='';const i=new Image();i.src=p.data;i.alt='Photo '+n;i.onclick=()=>lbOpen(n,p);i.onload=()=>{chat.scrollTop=chat.scrollHeight};d.appendChild(i);
     const c=document.createElement('div');c.className='cap';c.textContent='#'+n+(p.cap?' · '+p.cap:'')+' · '+new Date(p.at).toLocaleDateString('en-AU',{day:'numeric',month:'short'});d.appendChild(c)}).catch(()=>{d.textContent='📷 Couldn’t load photo #'+n+'.'})}
 async function photoTags(reply){
   const k=reply.match(/\[KEEP(?::\s*([^\]]*))?\]/i);
@@ -1068,7 +1068,7 @@ let lbList=[],lbAt=0;
 async function lbShow(){const e=lbList[lbAt];if(!e)return;$('lbImg').src='';$('lbCap').textContent='#'+e.n+(e.cap?' · '+e.cap:'')+' · '+new Date(e.at).toLocaleDateString('en-AU',{day:'numeric',month:'short'})+'  ('+(lbAt+1)+' of '+lbList.length+')';
   $('lbPrev').style.visibility=lbAt>0?'visible':'hidden';$('lbNext').style.visibility=lbAt<lbList.length-1?'visible':'hidden';
   const p=await phGet(e.n).catch(()=>null);if(lbList[lbAt]===e&&p)$('lbImg').src=p.data}
-function lbOpen(n){lbList=phIdx.slice().reverse();lbAt=Math.max(0,lbList.findIndex(x=>x.n===n));$('lb').hidden=false;lbShow()}
+function lbOpen(n,one){lbList=phIdx.slice().reverse();lbAt=lbList.findIndex(x=>x.n===n);if(lbAt<0){lbList=[one||{n,at:Date.now()}];lbAt=0}$('lb').hidden=false;lbShow()}
 function lbClose(){$('lb').hidden=true;$('lbImg').src=''}
 $('lbX').onclick=e=>{e.stopPropagation();lbClose()};
 $('lbPrev').onclick=e=>{e.stopPropagation();if(lbAt>0){lbAt--;lbShow()}};
