@@ -466,7 +466,7 @@ const MODEL='grok-4.20-0309-non-reasoning', THINK_MODEL='grok-4.7', KEEP=20;
 let apiKey=store.get('key','');
 const chat=$('chat');
 let busy=false;
-function markLatest(){const ms=chat.querySelectorAll('.msg');ms.forEach(m=>m.classList.remove('latest'));if(ms.length)ms[ms.length-1].classList.add('latest')}
+function markLatest(){const ms=[...chat.querySelectorAll('.msg')];ms.forEach(m=>m.classList.remove('latest'));if(!ms.length)return;let i=ms.length-1;ms[i].classList.add('latest');if(ms[i].classList.contains('me'))return;while(i>0&&!ms[i-1].classList.contains('me')){i--;ms[i].classList.add('latest')}}
 function bubble(text,cls){const d=document.createElement('div');d.className='msg '+cls;d.textContent=text;chat.appendChild(d);markLatest();if(typeof wake==='function')wake();chat.scrollTop=chat.scrollHeight;return d}
 function note(text,link){chat.querySelectorAll('.note.fresh').forEach(n=>n.classList.remove('fresh'));const d=document.createElement('div');d.className='note fresh';d.textContent=text;if(link){const a=document.createElement('a');a.href=link.url;a.target='_blank';a.rel='noopener';a.textContent=' '+link.label;a.style.cssText='color:#e07a95;font-weight:600;text-decoration:underline';d.appendChild(a)}chat.appendChild(d);chat.scrollTop=chat.scrollHeight;setTimeout(()=>d.classList.remove('fresh'),7000);wake()}
 let hushT=null;
@@ -565,15 +565,15 @@ async function runLater(){const now=Date.now();const due=later.filter(x=>x.due<=
   if(due.length){later=later.filter(x=>x.due>now);saveLater();
     for(const x of due){const late=now-x.due>180000;
       if(x.k==='toy'){if(!late&&!locked)await runToyTags(x.cmd,true)}
-      else if(x.k==='wake'){if(!late)wakeDone(x)}
+      else if(x.k==='wake'){if(now-x.due<1800000)wakeDone(x,now-x.due>90000?now-x.due:0)}
       else{note('\u23F1 Time\u2019s up'+(x.label?': '+x.label:''));try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}
         if(!late)timerDone(x)}}}
   if(!later.length)clearInterval(laterTick);showLater()}
 async function timerDone(x){for(let i=0;busy&&i<60;i++)await new Promise(r=>setTimeout(r,1000));if(busy||!apiKey)return;busy=true;
   history.push({who:'me',hide:true,text:'[The app: your '+fmtMins(x.sec/60)+' timer'+(x.label?' ("'+x.label+'")':'')+' has just finished. Carry on in character.]'});saveHistory();
   const t=bubble('typing\u2026','them typing');try{handleReply(t,await askGrok())}catch(e){t.remove();markLatest()}busy=false}
-async function wakeDone(x){for(let i=0;busy&&i<60;i++)await new Promise(r=>setTimeout(r,1000));if(busy||!apiKey)return;busy=true;
-  history.push({who:'me',hide:true,text:'[The app: your private wake-up'+(x.note?' ("'+x.note+'")':'')+' has come round. Tim can’t see this. Look at where things are, use your tools if you want to change anything, then either write to Tim or reply with just [QUIET].]'});saveHistory();
+async function wakeDone(x,lateMs){for(let i=0;busy&&i<60;i++)await new Promise(r=>setTimeout(r,1000));if(busy||!apiKey)return;busy=true;
+  history.push({who:'me',hide:true,text:'[The app: your private wake-up'+(x.note?' ("'+x.note+'")':'')+' has come round'+(lateMs?' '+fmtMins(lateMs/60000)+' late, because the app was closed or in the background':'')+'. Tim can’t see this. Look at where things are, use your tools if you want to change anything, then either write to Tim or reply with just [QUIET].]'});saveHistory();
   try{const reply=await askGrok(null,true);
     if(/^\s*\[QUIET\]\s*$/i.test(reply)||!clean(reply)&&!showNums(reply).length){const d=document.createElement('div');handleReply(d,reply);const m=history[history.length-1];if(m&&m.who==='them'){m.hide=true;saveHistory()}}
     else{const t=bubble('typing…','them typing');handleReply(t,reply)}}
