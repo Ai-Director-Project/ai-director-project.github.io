@@ -1127,14 +1127,14 @@ function renderCheck(){
   const upd=()=>{const left=check.due-Date.now();const ready=left<=0;
     const win=check.win||0, winLeft=win?Math.max(check.due,check.seenAt||0)+win*1000-Date.now():0;
     if(ready&&win&&!check.camAt&&winLeft<=0){if(document.visibilityState==='visible'&&Date.now()-visSince>2500){missCheck();return}}
-    checkCard.querySelector('.ck-title').textContent=ready?('📷 Photo check: '+(settings.name||'Vesper')+' wants to see. '+(win&&!check.camAt?Math.ceil(winLeft/1000)+'s left!':'Take it now.')):'📷 Photo check in '+fmt(left);
-    checkCard.querySelector('.ck-btns').hidden=!ready; checkCard.classList.toggle('ready',ready);
+    const setT=(el,t)=>{if(el.textContent!==t)el.textContent=t};
+    setT(checkCard.querySelector('.ck-title'),ready?('📷 Photo check: '+(settings.name||'Vesper')+' wants to see. '+(win&&!check.camAt?Math.ceil(winLeft/1000)+'s left!':'Take it now.')):'📷 Photo check in '+fmt(left));
+    if(checkCard.querySelector('.ck-btns').hidden!==!ready)checkCard.querySelector('.ck-btns').hidden=!ready; checkCard.classList.toggle('ready',ready);
     checkCard.querySelectorAll('button').forEach(b=>b.classList.toggle('primary',b.dataset.cam===check.cam));
-    $('status').textContent=ready?'Waiting for your photo':'Photo check in '+fmt(left);
+    setT($('status'),ready?'Waiting for your photo':'Photo check in '+fmt(left));
     if(ready&&!check.buzzed){check.buzzed=1;try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}}
-    if(ready&&(!win||check.camAt)){clearInterval(tick);tick=null}
-    chat.scrollTop=chat.scrollHeight};
-  upd(); if(check&&(check.due>Date.now()||(check.win&&!check.camAt)))tick=setInterval(upd,250);
+    if(ready&&(!win||check.camAt)){clearInterval(tick);tick=null}};
+  upd();chat.scrollTop=chat.scrollHeight; if(check&&(check.due>Date.now()||(check.win&&!check.camAt)))tick=setInterval(upd,250);
 }
 async function missCheck(){
   const win=check.win;clearCheck();note('⏱️ Photo check missed: no photo within '+win+' seconds');
